@@ -5,6 +5,35 @@ All notable changes to Hexshell are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.1] — 2026-05-24
+
+Polish pass on top of 0.1.0.
+
+### Added
+
+- Welcome hint banner top-left at boot: "type help for keybindings +
+  builtins". Fades out automatically after 8 s or on the first
+  keystroke. `prefers-reduced-motion` honored.
+
+### Changed
+
+- Version chip in the titlebar bumped to v0.1.1.
+
+### Removed
+
+- "SESSION TERMINATED" dead banner that pre-dated the in-process
+  hexsh shell — there's no PTY-exit semantic to surface anymore.
+
+### Fixed
+
+- `chrome-sandbox` setuid bit and `/opt/Hexshell/resources` perms in
+  the AUR `-bin` package — Hexshell now actually launches when
+  installed via `yay -S hexshell-bin`.
+- AUR PKGBUILD points at the correct AppImage filename
+  (`Hexshell-0.1.1-x86_64.AppImage`).
+- Icon installed at every standard hicolor size (16, 24, 32, 48, 64,
+  128, 256, 512) so panels and app menus pick it up.
+
 ## [0.1.0] — 2026-05-24
 
 Initial release. Everything in Hexshell that would later become a "feature

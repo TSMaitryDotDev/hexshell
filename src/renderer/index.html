@@ -205,23 +205,18 @@
 
   <div class="hud-grid" aria-hidden="true"></div>
 
+  <!-- Welcome hint banner. Sits in the top-left under the titlebar, fades
+       out automatically after a short window or on the first keystroke. -->
+  <div id="hud-hint" class="hud-hint" role="status" aria-live="polite">
+    type <span class="hud-hint__cmd">help</span> for keybindings + builtins
+  </div>
+
   <main class="terminal-shell">
     <div id="terminal" class="terminal" role="application" aria-label="Terminal"></div>
   </main>
 
   <div class="hud-scan" aria-hidden="true"></div>
   <div class="hud-flicker" aria-hidden="true"></div>
-
-  <!--
-    A small banner shown if the PTY exits. It is hidden by default and
-    populated from renderer.js. Lives outside the HUD chrome so it can sit
-    above the terminal without touching xterm's DOM.
-  -->
-  <div id="exit-banner" class="exit-banner" hidden>
-    <span class="exit-banner__label">SESSION TERMINATED</span>
-    <span id="exit-banner__detail" class="exit-banner__detail"></span>
-    <span class="exit-banner__hint">Ctrl+Shift+R to reconnect · Ctrl+Shift+Q to quit</span>
-  </div>
 
   <!-- xterm.js core + addons (bundled locally per CSP) -->
   <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>

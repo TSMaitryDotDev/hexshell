@@ -1,6 +1,6 @@
 {
   "name": "hexshell",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Hexshell — a fullscreen sci-fi terminal built on Electron, xterm.js and node-pty.",
   "private": true,
   "main": "src/main/main.js",
