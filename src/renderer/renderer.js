@@ -586,36 +586,6 @@
   }
   startClock();
 
-  // ──────────────────────────────────────────────────────────────────────
-  // Welcome hint banner
-  // ──────────────────────────────────────────────────────────────────────
-  // Shows "type help for keybindings + builtins" top-left for a few
-  // seconds after boot. Dismisses on first keystroke OR after an 8s
-  // idle window, whichever comes first. The element is styled in
-  // hud.css; we only flip classes here.
-  (function installHint() {
-    const el = document.getElementById('hud-hint');
-    if (!el) return;
-    let dismissed = false;
-    const dismiss = () => {
-      if (dismissed) return;
-      dismissed = true;
-      el.classList.remove('hud-hint--in');
-      el.classList.add('hud-hint--out');
-      window.removeEventListener('keydown', dismiss, true);
-      // Remove from the DOM after the fade so it stops absorbing
-      // accessibility-tree presence too.
-      setTimeout(() => { try { el.remove(); } catch (_) {} }, 900);
-    };
-    // Reveal after a small delay so it lands AFTER the CRT boot animation
-    // settles — otherwise the fade-in fights the stage transitions.
-    setTimeout(() => el.classList.add('hud-hint--in'), 800);
-    // Auto-dismiss timer.
-    setTimeout(dismiss, 8000);
-    // First keystroke hides it.
-    window.addEventListener('keydown', dismiss, true);
-  })();
-
   /**
    * Flash a transient HUD notice when a screenshot is taken or fails.
    * Implemented as a short-lived element appended to <body>; CSS handles

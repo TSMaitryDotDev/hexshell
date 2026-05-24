@@ -86,6 +86,7 @@ class HexShell {
   // -------------------------------------------------------------------------
 
   start() {
+    this._banner();
     this._editor.begin();
   }
 
@@ -306,9 +307,7 @@ class HexShell {
 
   _banner() {
     const sysinfo = require('./sysinfo');
-    this._emit('\r\n');
-    sysinfo.render(this._emit, this._env);
-    this._emit('\r\n');
+    sysinfo.renderHint(this._emit);
   }
 }
 

@@ -640,6 +640,18 @@ function render(emit, env) {
   emit(`${C.dim}│${C.reset}   ${PALETTE_BLOCK}  ${C.dim}truecolor / 256-color${C.reset}\r\n`);
   emit(`${C.dim}│${C.reset}\r\n`);
   emit(`${C.dim}└${bar(W - 1)}${C.reset}\r\n`);
+}
+
+/**
+ * Emit just the one-line "type help for keybindings + builtins" hint.
+ * Used by the shell on startup so the first thing the user sees is the
+ * hint, without the full system banner. The `sys` builtin and other
+ * on-demand callers use `render()` for the full readout.
+ *
+ * @param {(s:string)=>void} emit
+ */
+function renderHint(emit) {
+  const C = ANSI;
   emit(`${C.dim}type ${C.reset}help${C.dim} for keybindings + builtins${C.reset}\r\n`);
 }
 
@@ -652,4 +664,4 @@ function renderKV(pair, colW, keyW, C) {
   return `${keyStr}  ${valStr}`;
 }
 
-module.exports = { gather, render, osGlyphName };
+module.exports = { gather, render, osGlyphName, renderHint };
