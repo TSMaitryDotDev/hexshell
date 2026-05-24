@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!--
+    CSP: lock the renderer down. We only need 'self' for everything; xterm
+    is bundled, no remote scripts, no inline scripts. 'unsafe-inline' is
+    allowed for styles only because xterm.js sets a few inline styles on its
+    own DOM nodes (selection layer, cursor) and disabling it breaks rendering.
+    -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self';
+                 style-src 'self' 'unsafe-inline';
+                 img-src 'self' data:;
+                 font-src 'self' data:;
+                 media-src 'self';
+                 connect-src 'self';
+                 object-src 'none';
+                 base-uri 'none';
+                 frame-src 'none';">
+  <meta name="referrer" content="no-referrer" />
+  <title>Hexshell</title>
+
+  <!-- Bundled MesloLGL Nerd Font Mono. Loaded first so @font-face is parsed
+       before any layout that uses it. -->
+  <link rel="stylesheet" href="./fonts/fonts.css" />
+  <!-- Preload audio assets so the AudioContext can decode without blocking
+       the first keystroke. -->
+  <link rel="preload" href="../audio/startup-v1.wav" as="audio" type="audio/wav" />
+  <link rel="preload" href="../audio/keysound.wav"   as="audio" type="audio/wav" />
+  <link rel="preload" href="../audio/cmd-error.wav"  as="audio" type="audio/wav" />
+  <link rel="preload" href="../audio/process.wav"    as="audio" type="audio/wav" />
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="../styles/reset.css" />
+  <link rel="stylesheet" href="../styles/terminal.css" />
+  <link rel="stylesheet" href="../styles/hud.css" />
+</head>
+<body>
+  <!--
+    Layered structure:
+      .hud-frame   = animated border / corners / titlebar
+      .hud-grid    = subtle grid overlay (GPU-friendly background)
+      .terminal    = xterm.js mount point (clean, no effects on text)
+      .hud-scan    = scanline overlay (transform animation only)
+      .hud-flicker = rare opacity flicker (very low frequency)
+    Everything except .terminal has pointer-events: none so input lands on
+    xterm's textarea where it belongs.
+  -->
+  <div class="hud-frame" aria-hidden="true">
+    <div class="hud-corner hud-corner--tl"></div>
+    <div class="hud-corner hud-corner--tr"></div>
+    <div class="hud-corner hud-corner--bl"></div>
+    <div class="hud-corner hud-corner--br"></div>
+    <div class="hud-titlebar">
+      <button class="hud-system" id="system-button"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-controls="system-menu">[ SYSTEM ]</button>
+      <span class="hud-titlebar__sep">//</span>
+      <span class="hud-titlebar__brand">HEXSHELL</span>
+      <span class="hud-titlebar__version" id="hud-version" aria-label="Version">v0.0.0</span>
+      <span class="hud-titlebar__sep">//</span>
+      <span class="hud-titlebar__sub" id="hud-shell">SHELL: detecting…</span>
+      <span class="hud-titlebar__spacer"></span>
+      <span class="hud-clock" id="hud-clock" role="timer" aria-live="off">--:--:--</span>
+      <span class="hud-titlebar__spacer"></span>
+      <span class="hud-titlebar__sub" id="hud-status">LINK: ESTABLISHING</span>
+      <div class="hud-winctl" role="group" aria-label="Window controls">
+        <button class="hud-winctl__btn"
+                id="winctl-minimize"
+                type="button"
+                aria-label="Minimize"
+                title="Minimize">_</button>
+        <button class="hud-winctl__btn"
+                id="winctl-maximize"
+                type="button"
+                aria-label="Toggle fullscreen"
+                title="Toggle fullscreen (F11)">▢</button>
+        <button class="hud-winctl__btn hud-winctl__btn--close"
+                id="winctl-close"
+                type="button"
+                aria-label="Close"
+                title="Close (Ctrl+Shift+Q)">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM dropdown menu. Lives outside the .hud-frame so it can capture
+       clicks (the frame is pointer-events: none). Hidden by default. -->
+  <nav id="system-menu" class="system-menu" role="menu" aria-labelledby="system-button" hidden>
+    <button class="system-menu__item" role="menuitem" data-action="reload" tabindex="-1">
+      <span class="system-menu__tree" aria-hidden="true">├─</span>
+      <span class="system-menu__label">Reload</span>
+      <span class="system-menu__hint" aria-hidden="true">Ctrl+Shift+R</span>
+    </button>
+    <button class="system-menu__item" role="menuitem" data-action="clear" tabindex="-1">
+      <span class="system-menu__tree" aria-hidden="true">├─</span>
+      <span class="system-menu__label">Clear</span>
+      <span class="system-menu__hint" aria-hidden="true">Ctrl+L</span>
+    </button>
+    <button class="system-menu__item" role="menuitem" data-action="settings" tabindex="-1">
+      <span class="system-menu__tree" aria-hidden="true">├─</span>
+      <span class="system-menu__label">Settings</span>
+      <span class="system-menu__hint" aria-hidden="true"></span>
+    </button>
+    <button class="system-menu__item" role="menuitem" data-action="splash" tabindex="-1">
+      <span class="system-menu__tree" aria-hidden="true">├─</span>
+      <span class="system-menu__label">System info</span>
+      <span class="system-menu__hint" aria-hidden="true"></span>
+    </button>
+    <button class="system-menu__item" role="menuitem" data-action="exit" tabindex="-1">
+      <span class="system-menu__tree" aria-hidden="true">└─</span>
+      <span class="system-menu__label">Exit</span>
+      <span class="system-menu__hint" aria-hidden="true">Ctrl+Shift+Q</span>
+    </button>
+  </nav>
+
+  <!-- OS splash overlay. Shown on first boot (auto-dismisses after a few
+       seconds) and on demand via the `splash` builtin / SYSTEM menu. -->
+  <div id="os-splash" class="splash" role="dialog" aria-modal="false" aria-labelledby="splash-title" hidden>
+    <div class="splash__panel">
+      <div class="splash__logo" id="splash-logo" aria-hidden="true"></div>
+      <div class="splash__info">
+        <h2 class="splash__title" id="splash-title">— SYSTEM —</h2>
+        <dl class="splash__grid" id="splash-grid"></dl>
+        <div class="splash__palette" aria-hidden="true">
+          <span style="background:#000"></span><span style="background:#a00"></span>
+          <span style="background:#0a0"></span><span style="background:#aa0"></span>
+          <span style="background:#00a"></span><span style="background:#a0a"></span>
+          <span style="background:#0aa"></span><span style="background:#aaa"></span>
+          <span style="background:#555"></span><span style="background:#f55"></span>
+          <span style="background:#5f5"></span><span style="background:#ff5"></span>
+          <span style="background:#55f"></span><span style="background:#f5f"></span>
+          <span style="background:#5ff"></span><span style="background:#fff"></span>
+        </div>
+        <label class="splash__dontshow">
+          <input type="checkbox" id="splash-dontshow" data-pref="splash.skipBoot">
+          <span>Don't show on launch</span>
+        </label>
+        <div class="splash__hint">press any key to dismiss</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings modal. Owns runtime audio preferences (persisted to
+       localStorage). Hidden by default; opened from the SYSTEM menu. -->
+  <div id="settings-modal" class="modal" role="dialog" aria-modal="true"
+       aria-labelledby="settings-title" hidden>
+    <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal__panel" role="document">
+      <header class="modal__header">
+        <h2 id="settings-title">[ SETTINGS ]</h2>
+        <button class="modal__close" type="button" aria-label="Close" data-modal-close>×</button>
+      </header>
+      <section class="modal__body">
+        <h3 class="modal__section-title">DISPLAY</h3>
+        <div class="modal__row modal__row--choice">
+          <span class="modal__row-label">Cursor shape</span>
+          <div class="modal__choice" role="radiogroup" aria-label="Cursor shape" data-pref-group="display.cursor">
+            <button type="button" role="radio" data-value="block"     aria-checked="false" class="modal__choice-btn">
+              <span class="modal__choice-glyph" aria-hidden="true">█</span>
+              <span class="modal__choice-text">Block</span>
+            </button>
+            <button type="button" role="radio" data-value="bar"       aria-checked="false" class="modal__choice-btn">
+              <span class="modal__choice-glyph" aria-hidden="true">▌</span>
+              <span class="modal__choice-text">I-beam</span>
+            </button>
+            <button type="button" role="radio" data-value="underline" aria-checked="false" class="modal__choice-btn">
+              <span class="modal__choice-glyph" aria-hidden="true">▁</span>
+              <span class="modal__choice-text">Underline</span>
+            </button>
+          </div>
+        </div>
+
+        <h3 class="modal__section-title">AUDIO</h3>
+        <label class="modal__row">
+          <input type="checkbox" data-pref="audio.click">
+          <span class="modal__row-label">Key click</span>
+          <span class="modal__row-hint">Mechanical click on every keystroke</span>
+        </label>
+        <label class="modal__row">
+          <input type="checkbox" data-pref="audio.error">
+          <span class="modal__row-label">Error chime</span>
+          <span class="modal__row-hint">Sounds when a command exits non-zero</span>
+        </label>
+        <label class="modal__row">
+          <input type="checkbox" data-pref="audio.process">
+          <span class="modal__row-label">Process loop</span>
+          <span class="modal__row-hint">Ambient hum during installs and downloads</span>
+        </label>
+        <label class="modal__row modal__row--slider">
+          <span class="modal__row-label">Master volume</span>
+          <input type="range" min="0" max="100" step="1" data-pref="audio.volume">
+          <output data-output="audio.volume">45</output>
+        </label>
+      </section>
+      <footer class="modal__footer">
+        <span class="modal__hint">Esc closes</span>
+        <span class="modal__version" id="settings-version">Hexshell</span>
+      </footer>
+    </div>
+  </div>
+
+  <div class="hud-grid" aria-hidden="true"></div>
+
+  <main class="terminal-shell">
+    <div id="terminal" class="terminal" role="application" aria-label="Terminal"></div>
+  </main>
+
+  <div class="hud-scan" aria-hidden="true"></div>
+  <div class="hud-flicker" aria-hidden="true"></div>
+
+  <!--
+    A small banner shown if the PTY exits. It is hidden by default and
+    populated from renderer.js. Lives outside the HUD chrome so it can sit
+    above the terminal without touching xterm's DOM.
+  -->
+  <div id="exit-banner" class="exit-banner" hidden>
+    <span class="exit-banner__label">SESSION TERMINATED</span>
+    <span id="exit-banner__detail" class="exit-banner__detail"></span>
+    <span class="exit-banner__hint">Ctrl+Shift+R to reconnect · Ctrl+Shift+Q to quit</span>
+  </div>
+
+  <!-- xterm.js core + addons (bundled locally per CSP) -->
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+
+  <!-- Startup chime + key click + error / process loops. -->
+  <script src="./audio.js"></script>
+  <!-- Distro logo SVG strings (used by the OS splash overlay). -->
+  <script src="./os-logos.js"></script>
+  <!-- SYSTEM menu + Settings modal. Loads before renderer.js so the
+       chrome is interactive even if xterm is still booting. -->
+  <script src="./system.js"></script>
+  <script src="./renderer.js"></script>
+</body>
+</html>

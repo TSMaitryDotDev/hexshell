@@ -1,0 +1,121 @@
+# Maintainer: Hexshell <hexshell@example.invalid>
+#
+# Hexshell — Electron-based sci-fi terminal. The -bin package wraps the
+# pre-built AppImage from the GitHub release. We extract its contents and
+# install them under /opt, then expose `/usr/bin/hexshell` and a desktop
+# entry. Building Electron from source on the AUR is impractical for users
+# (multi-hour build + 10+ GB scratch space), so a -bin package is standard.
+
+pkgname=hexshell-bin
+_pkgname=hexshell
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Fullscreen sci-fi terminal with its own interactive shell (hexsh)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/hexshell/hexshell"
+license=('MIT')
+
+# Runtime dependencies. Electron's bundled Chromium needs these shared libs;
+# leaving them implicit would make the package "work on the maintainer's
+# machine" only.
+depends=(
+  'libnotify'
+  'nss'
+  'libxtst'
+  'util-linux-libs'
+  'at-spi2-core'
+  'libdrm'
+  'libxkbcommon'
+  'libsecret'
+  'glibc'
+  'gcc-libs'
+  'fontconfig'
+  'libxss'
+  'alsa-lib'
+)
+
+# Build-time tools needed to extract and process the AppImage.
+makedepends=('binutils' 'imagemagick')
+
+# We provide a generic `hexshell` so users can `pacman -Rs hexshell-bin`
+# even after switching to a hypothetical from-source `hexshell` package.
+provides=("${_pkgname}=${pkgver}")
+conflicts=("${_pkgname}")
+
+options=(!strip !debug)
+
+# Source URLs are arch-suffixed. The `_amd64`/`_arm64` mapping mirrors what
+# electron-builder writes; if you rename the AppImage in CI, update here.
+source_x86_64=("${_pkgname}-${pkgver}-x64.AppImage::https://github.com/hexshell/hexshell/releases/download/v${pkgver}/Hexshell-${pkgver}-x64.AppImage")
+source_aarch64=("${_pkgname}-${pkgver}-arm64.AppImage::https://github.com/hexshell/hexshell/releases/download/v${pkgver}/Hexshell-${pkgver}-arm64.AppImage")
+
+# SHA256 sums populated from dist/SHA256SUMS at release time.
+# Replace these placeholders before publishing the AUR package:
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+prepare() {
+  cd "${srcdir}"
+  local appimage
+  case "${CARCH}" in
+    x86_64)  appimage="${_pkgname}-${pkgver}-x64.AppImage" ;;
+    aarch64) appimage="${_pkgname}-${pkgver}-arm64.AppImage" ;;
+    *) echo "Unsupported arch: ${CARCH}"; return 1 ;;
+  esac
+
+  # AppImages are squashfs payloads with a stub. `--appimage-extract`
+  # unpacks into ./squashfs-root/ without needing fuse.
+  chmod +x "./${appimage}"
+  "./${appimage}" --appimage-extract >/dev/null
+}
+
+package() {
+  cd "${srcdir}/squashfs-root"
+
+  # 1. App payload -> /opt/Hexshell. /opt is the convention for vendored
+  #    binaries on Arch (see `electron`, `slack-desktop`, `discord`).
+  install -dm755 "${pkgdir}/opt/Hexshell"
+  cp -a --no-preserve=ownership ./* "${pkgdir}/opt/Hexshell/"
+
+  # 2. Strip the .desktop from the AppImage; we'll install our own that
+  #    points at the wrapper script.
+  rm -f "${pkgdir}/opt/Hexshell/"*.desktop
+
+  # 3. Wrapper on $PATH. Electron's setuid sandbox helper must be findable;
+  #    /opt is fine because the binary uses RPATH ORIGIN.
+  install -dm755 "${pkgdir}/usr/bin"
+  cat > "${pkgdir}/usr/bin/hexshell" <<'EOF'
+#!/bin/sh
+exec /opt/Hexshell/hexshell "$@"
+EOF
+  chmod 755 "${pkgdir}/usr/bin/hexshell"
+
+  # 4. Icon (hicolor 512x512). pkgctl-build hooks pick this up automatically.
+  install -Dm644 "${srcdir}/squashfs-root/usr/share/icons/hicolor/512x512/apps/hexshell.png" \
+    "${pkgdir}/usr/share/icons/hicolor/512x512/apps/hexshell.png" 2>/dev/null || \
+    install -Dm644 "${srcdir}/squashfs-root/hexshell.png" \
+      "${pkgdir}/usr/share/icons/hicolor/512x512/apps/hexshell.png" 2>/dev/null || true
+
+  # 5. Desktop entry.
+  install -dm755 "${pkgdir}/usr/share/applications"
+  cat > "${pkgdir}/usr/share/applications/hexshell.desktop" <<EOF
+[Desktop Entry]
+Name=Hexshell
+GenericName=Terminal Emulator
+Comment=Sci-fi fullscreen terminal
+Exec=hexshell %U
+Icon=hexshell
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;Utility;
+StartupNotify=true
+StartupWMClass=Hexshell
+Keywords=terminal;shell;hexsh;cyberpunk;edex;
+EOF
+
+  # 6. License — required by AUR rules for non-standard licenses, but MIT
+  #    is "common", so we include it under /usr/share/licenses/<pkgname>/
+  #    as the standard practice.
+  install -Dm644 "${srcdir}/squashfs-root/LICENSE.electron.txt" \
+    "${pkgdir}/usr/share/licenses/${_pkgname}/LICENSE.electron" 2>/dev/null || true
+}

@@ -1,0 +1,908 @@
+/* -------------------------------------------------------------------------
+   Sci-fi HUD chrome.
+   All overlays use pointer-events:none so they never steal input.
+   All animations are transform/opacity only -> stay on the GPU compositor,
+   no layout/paint thrash, no impact on terminal typing latency.
+   ------------------------------------------------------------------------- */
+
+/* Outer frame -------------------------------------------------------------- */
+.hud-frame {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  /* The frame border itself — single 1px stroke, no blur. */
+  border: 1px solid var(--hex-line);
+  border-radius: var(--hud-radius);
+  margin: 14px;
+}
+
+/* Corner brackets ---------------------------------------------------------- */
+.hud-corner {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--hex-glow);
+  filter: drop-shadow(0 0 4px var(--hex-glow-dim)); /* one tiny shadow, fine */
+}
+.hud-corner--tl { top: -2px;    left: -2px;    border-right: 0; border-bottom: 0; border-top-left-radius: var(--hud-radius); }
+.hud-corner--tr { top: -2px;    right: -2px;   border-left: 0;  border-bottom: 0; border-top-right-radius: var(--hud-radius); }
+.hud-corner--bl { bottom: -2px; left: -2px;    border-right: 0; border-top: 0;    border-bottom-left-radius: var(--hud-radius); }
+.hud-corner--br { bottom: -2px; right: -2px;   border-left: 0;  border-top: 0;    border-bottom-right-radius: var(--hud-radius); }
+
+/* Titlebar ----------------------------------------------------------------- */
+.hud-titlebar {
+  position: absolute;
+  top: 0;
+  /* The corner brackets are 26px from each corner. Indenting the titlebar
+     past them keeps the SYSTEM button visually clear of the frame. */
+  left: 36px;
+  right: 36px;
+  height: var(--hud-titlebar);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 6px;
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--hex-glow);
+  text-shadow: 0 0 6px var(--hex-glow-dim);
+  border-bottom: 1px solid var(--hex-line);
+}
+
+.hud-titlebar__brand {
+  font-weight: 700;
+  color: var(--hex-glow);
+}
+.hud-titlebar__version {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--hex-fg);
+  opacity: 0.7;
+  padding: 2px 6px;
+  border: 1px solid var(--hex-line);
+  border-radius: 3px;
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+}
+.hud-titlebar__sep {
+  color: var(--hex-line);
+}
+.hud-titlebar__sub {
+  color: var(--hex-fg);
+  opacity: 0.85;
+}
+.hud-titlebar__sub[data-kind="ok"]  { color: var(--hex-glow); }
+.hud-titlebar__sub[data-kind="err"] { color: var(--hex-error); }
+.hud-titlebar__spacer { flex: 1; }
+
+/* HUD clock — Orbitron, centered, large enough to read at a glance.
+   `font-variant-numeric: tabular-nums` keeps the digits from jumping
+   width as seconds tick, so the centered text doesn't oscillate. */
+.hud-clock {
+  font-family: "Orbitron", "MesloLGL", "DejaVu Sans Mono", monospace;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.18em;
+  color: var(--hex-glow);
+  text-shadow: 0 0 8px var(--hex-glow-dim);
+  font-variant-numeric: tabular-nums;
+  /* Reserve a stable width so the spacers don't jitter when the clock
+     toggles between AM/PM lengths or future format changes. 9ch fits
+     "HH:MM:SS" plus a comfortable buffer. */
+  min-width: 9ch;
+  text-align: center;
+  user-select: none;
+}
+
+/* Window controls (top-right) -------------------------------------------- */
+/* Three matching square buttons: minimize, maximize/fullscreen, close.
+   Same visual language as the SYSTEM button so the titlebar reads as one
+   coherent strip. The close button picks up red on hover; nothing else
+   shouts so the titlebar stays calm at rest. */
+.hud-winctl {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hud-winctl__btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  background: transparent;
+  border: 1px solid var(--hex-line);
+  border-radius: 3px;
+  color: var(--hex-glow);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.hud-winctl__btn:hover {
+  background: rgba(124, 255, 178, 0.10);
+  border-color: var(--hex-glow);
+}
+.hud-winctl__btn:focus-visible {
+  outline: 1px solid var(--hex-glow);
+  outline-offset: 2px;
+}
+/* Close: red affordance on hover so the user always knows it's destructive. */
+.hud-winctl__btn--close:hover {
+  background: rgba(255, 85, 119, 0.15);
+  border-color: var(--hex-error);
+  color: var(--hex-error);
+}
+
+/* SYSTEM menu trigger ----------------------------------------------------- */
+/* The HUD frame itself is pointer-events:none so it never steals input from
+   xterm. The button re-enables them locally. */
+.hud-system {
+  pointer-events: auto;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--hex-line);
+  border-radius: 3px;
+  color: var(--hex-glow);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  /* No explicit line-height: the font's natural metrics + flex centering
+     keeps the glyphs visually centered. Setting line-height:1 made the text
+     sit above center because monospace fonts have asymmetric ascent/descent. */
+  padding: 0 10px;
+  cursor: pointer;
+  text-shadow: 0 0 6px var(--hex-glow-dim);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.hud-system:hover,
+.hud-system[aria-expanded="true"] {
+  background: rgba(124, 255, 178, 0.08);
+  border-color: var(--hex-glow);
+}
+.hud-system:focus-visible {
+  outline: 1px solid var(--hex-glow);
+  outline-offset: 2px;
+}
+
+/* SYSTEM dropdown -------------------------------------------------------- */
+.system-menu {
+  position: fixed;
+  /* Sits just below the titlebar with a small gap, lined up under the
+     SYSTEM button (which is indented 36px from the frame edge). */
+  top: calc(var(--hud-titlebar) + 6px);
+  left: 42px;
+  z-index: 20;
+  min-width: 240px;
+  padding: 6px;
+  background: rgba(0, 10, 6, 0.94);
+  border: 1px solid var(--hex-line);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 8px 24px rgba(0, 0, 0, 0.6),
+    inset 0 0 24px rgba(124, 255, 178, 0.05);
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: var(--hex-fg);
+  /* Subtle entrance: drop into place. transform + opacity only, GPU-cheap. */
+  transform-origin: top left;
+  animation: hex-menu-in 120ms ease-out;
+}
+.system-menu[hidden] { display: none; }
+
+@keyframes hex-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.system-menu__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.system-menu__item:hover,
+.system-menu__item:focus-visible {
+  background: rgba(124, 255, 178, 0.10);
+  color: var(--hex-glow);
+  outline: none;
+}
+.system-menu__item:active {
+  background: rgba(124, 255, 178, 0.18);
+}
+.system-menu__tree {
+  color: var(--hex-line);
+}
+.system-menu__hint {
+  color: var(--hex-line);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+}
+
+/* Settings modal --------------------------------------------------------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+.modal[hidden] { display: none; }
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal__panel {
+  position: relative;
+  width: min(560px, 90vw);
+  max-height: 80vh;
+  overflow: auto;
+  background: rgba(0, 10, 6, 0.96);
+  border: 1px solid var(--hex-line);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 16px 40px rgba(0, 0, 0, 0.7),
+    inset 0 0 30px rgba(124, 255, 178, 0.05);
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+  color: var(--hex-fg);
+}
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--hex-line);
+}
+.modal__header h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--hex-glow);
+  text-shadow: 0 0 6px var(--hex-glow-dim);
+}
+.modal__close {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--hex-line);
+  color: var(--hex-fg);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal__close:hover { color: var(--hex-glow); border-color: var(--hex-glow); }
+
+.modal__body { padding: 18px; }
+.modal__section-title {
+  margin: 0 0 12px 0;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  color: var(--hex-glow);
+  border-bottom: 1px dashed var(--hex-line);
+  padding-bottom: 6px;
+}
+.modal__row {
+  display: grid;
+  grid-template-columns: 22px 160px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.modal__row:hover { background: rgba(124, 255, 178, 0.06); }
+.modal__row input[type="checkbox"] {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--hex-line);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 120ms ease;
+}
+.modal__row input[type="checkbox"]:checked {
+  border-color: var(--hex-glow);
+  background: rgba(124, 255, 178, 0.15);
+}
+.modal__row input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  background: var(--hex-glow);
+  box-shadow: 0 0 4px var(--hex-glow);
+  border-radius: 1px;
+}
+.modal__row-label { color: var(--hex-glow); }
+.modal__row-hint  { color: var(--hex-fg); opacity: 0.65; font-size: 11px; }
+.modal__row--slider { grid-template-columns: 1fr 200px 40px; }
+.modal__row--slider input[type="range"] {
+  appearance: none;
+  height: 4px;
+  background: var(--hex-line);
+  border-radius: 2px;
+  outline: none;
+}
+.modal__row--slider input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--hex-glow);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--hex-glow-dim);
+}
+.modal__row--slider output {
+  text-align: right;
+  color: var(--hex-glow);
+  font-size: 12px;
+}
+
+/* Choice picker (single-select; used for cursor shape) ------------------- */
+.modal__row--choice {
+  grid-template-columns: 160px 1fr;
+  align-items: center;
+  cursor: default;
+}
+.modal__choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.modal__choice-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--hex-line);
+  border-radius: 3px;
+  color: var(--hex-fg);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.modal__choice-btn:hover {
+  background: rgba(124, 255, 178, 0.08);
+  border-color: var(--hex-glow);
+  color: var(--hex-glow);
+}
+.modal__choice-btn[aria-checked="true"] {
+  background: rgba(124, 255, 178, 0.14);
+  border-color: var(--hex-glow);
+  color: var(--hex-glow);
+  text-shadow: 0 0 6px var(--hex-glow-dim);
+}
+.modal__choice-glyph {
+  color: var(--hex-glow);
+  font-size: 13px;
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+  width: 14px;
+  text-align: center;
+}
+.modal__footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-top: 1px solid var(--hex-line);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--hex-fg);
+  opacity: 0.65;
+}
+
+/* Background grid ---------------------------------------------------------- */
+/* A pair of crossing linear gradients = a sharp 1px grid with zero JS. */
+.hud-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--hex-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hex-line-soft) 1px, transparent 1px);
+  background-size: 40px 40px;
+  /* A tiny radial darken at the corners gives a CRT vignette look. */
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 55%, transparent 95%);
+          mask-image: radial-gradient(ellipse at center, #000 55%, transparent 95%);
+  opacity: 0.55;
+}
+
+/* Scanlines ---------------------------------------------------------------- */
+/* A repeating gradient gives perfectly aligned 2px scanlines. We slowly
+   translate it on the Y axis for the gentle "drifting" CRT feel. */
+.hud-scan {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(124, 255, 178, 0.045) 0px,
+    rgba(124, 255, 178, 0.045) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: screen;
+  animation: hex-scan 9s linear infinite;
+  will-change: transform;
+}
+@keyframes hex-scan {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, 6px, 0); }
+}
+
+/* Subtle CRT flicker ------------------------------------------------------- */
+/* opacity-only, very low frequency. Steps animation = no interpolation =
+   essentially zero cost on the compositor between steps. */
+.hud-flicker {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  background: rgba(124, 255, 178, 0.02);
+  animation: hex-flicker 6s steps(20, end) infinite;
+  will-change: opacity;
+}
+@keyframes hex-flicker {
+  0%, 92%, 100% { opacity: 1; }
+  93%           { opacity: 0.85; }
+  94%           { opacity: 1; }
+  96%           { opacity: 0.92; }
+  97%           { opacity: 1; }
+}
+
+/* Exit banner -------------------------------------------------------------- */
+.exit-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--hud-pad) + 18px);
+  transform: translateX(-50%);
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--hex-error);
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--hex-error);
+  border-radius: 6px;
+  text-shadow: 0 0 6px rgba(255, 85, 119, 0.4);
+}
+.exit-banner__label  { font-weight: 700; }
+.exit-banner__detail { color: var(--hex-fg); opacity: 0.8; }
+.exit-banner__hint   { color: var(--hex-fg); opacity: 0.55; }
+
+/* Respect prefers-reduced-motion: disable all animated overlays. The HUD
+   still looks great, just static. */
+@media (prefers-reduced-motion: reduce) {
+  .hud-scan,
+  .hud-flicker,
+  .hud-toast {
+    animation: none !important;
+  }
+}
+
+/* Transient HUD toast (currently used by the screenshot key) ------------- */
+.hud-toast {
+  position: fixed;
+  top: calc(var(--hud-titlebar) + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: 80vw;
+  padding: 8px 16px;
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--hex-glow);
+  background: rgba(0, 10, 6, 0.92);
+  border: 1px solid var(--hex-glow);
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(124, 255, 178, 0.18);
+  /* slide in from the top, hold, fade out — total 3.4s.
+     keyframe times: 0% start, 6% in, 88% in, 100% out. */
+  animation: hex-toast 3400ms ease forwards;
+  will-change: opacity, transform;
+  pointer-events: none;
+}
+.hud-toast--err {
+  color: var(--hex-error);
+  border-color: var(--hex-error);
+  box-shadow: 0 0 12px rgba(255, 85, 119, 0.25);
+}
+@keyframes hex-toast {
+  0%   { opacity: 0; transform: translate(-50%, -10px); }
+  6%   { opacity: 1; transform: translate(-50%, 0); }
+  88%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+
+/* OS splash overlay ------------------------------------------------------ */
+/* Real SVG distro logo + system info, rendered as a DOM panel above the
+   terminal. xterm.js can't draw bitmap or vector logos, so we float the
+   panel over it. The terminal underneath stays interactive once the
+   splash dismisses; while it's up, any keypress / click closes it. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  background: rgba(0, 6, 4, 0.7);
+  /* Default fade-in for in-app reopens (SYSTEM menu). Boot-mode opens
+     swap this for `splash--boot` which uses the CRT-on animation against
+     a solid black backdrop instead of the translucent overlay. */
+  animation: hex-splash-in 220ms ease-out;
+  transform-origin: 50% 50%;
+}
+.splash[hidden] { display: none; }
+@keyframes hex-splash-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Boot-staged splash: solid black backdrop (terminal isn't on yet) and
+   the CRT-on animation playing on the splash itself instead of the
+   regular fade. */
+.splash.splash--boot {
+  background: #000;
+  animation: hex-crt-on 700ms cubic-bezier(.25,.65,.20,1) both;
+  will-change: transform, filter, opacity;
+}
+
+/* When dismissing in boot mode we play the CRT-off, then JS reveals the
+   terminal. The splash element gets `splash--off` for the duration of
+   the off animation. */
+.splash.splash--off {
+  animation: hex-crt-off 600ms cubic-bezier(.55,.05,.85,.30) both;
+  will-change: transform, filter, opacity;
+}
+
+.splash__panel {
+  display: grid;
+  /* Wider logo column + roomier info area for the fastfetch-class grid. */
+  grid-template-columns: 240px 1fr;
+  gap: 48px;
+  align-items: center;
+  /* Use most of the screen on big displays so CPU / GPU / disk lines
+     never truncate. We still cap at 1600px so it stays readable on
+     ultrawides. 96vw lets the panel breathe past the HUD frame. */
+  width: min(1600px, 96vw);
+  padding: 36px 48px;
+  background: rgba(0, 10, 6, 0.96);
+  border: 1px solid var(--hex-glow);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 16px 60px rgba(0, 0, 0, 0.7),
+    inset 0 0 40px rgba(124, 255, 178, 0.06);
+}
+
+.splash__logo {
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 12px rgba(124, 255, 178, 0.25));
+}
+.splash__logo svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.splash__info {
+  font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
+  color: var(--hex-fg);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+.splash__title {
+  margin: 0 0 14px 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  color: var(--hex-glow);
+  text-shadow: 0 0 6px var(--hex-glow-dim);
+  text-align: center;
+}
+.splash__grid {
+  /* Two-column layout for the info pairs. Each <dt>/<dd> pair is kept
+     together so a key never lands in one column and its value in the
+     other. CSS multi-column is the cheapest way to do this — no JS,
+     no measuring, balances rows automatically when the panel resizes. */
+  column-count: 2;
+  column-gap: 40px;
+  margin: 0;
+}
+.splash__grid > div {
+  display: grid;
+  /* Wider key column to fit "electron"/"terminal"; flexible value
+     column. The 1fr value lets long strings expand inline rather than
+     getting cropped. */
+  grid-template-columns: 96px 1fr;
+  column-gap: 16px;
+  row-gap: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin-bottom: 4px;
+}
+.splash__grid dt {
+  color: var(--hex-line);
+  text-transform: lowercase;
+  margin: 0;
+}
+.splash__grid dd {
+  margin: 0;
+  color: var(--hex-fg);
+  /* Show the value on a single line. With the panel at min(1600px,96vw)
+     and only 2 info columns, every value our gather() produces fits.
+     If a future field really did need wrapping, swap nowrap → normal. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.splash__grid dd strong {
+  color: var(--hex-glow);
+  font-weight: 700;
+}
+
+/* Tiny screens: stack logo above info, single info column. */
+@media (max-width: 720px) {
+  .splash__panel { grid-template-columns: 1fr; gap: 24px; padding: 20px; }
+  .splash__logo  { margin: 0 auto; width: 160px; height: 160px; }
+  .splash__grid  { column-count: 1; }
+}
+.splash__palette {
+  display: flex;
+  gap: 0;
+  margin-top: 14px;
+  width: max-content;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.splash__palette > span {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+.splash__hint {
+  margin-top: 10px;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  color: var(--hex-line);
+  text-align: center;
+  /* Smooth breathing pulse — keeps the prompt visible without flashing
+     hard like a CRT cursor. We animate opacity only (compositor-cheap)
+     and transition the color subtly toward phosphor green at the peak
+     so the line reads as "live" rather than dim chrome. */
+  animation: hex-splash-hint 2.4s ease-in-out infinite;
+  will-change: opacity, color;
+}
+
+/* "Don't show on launch" checkbox row, sitting between the palette and
+   the dismiss hint. Centered to match the title and hint above. */
+.splash__dontshow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--hex-fg);
+  cursor: pointer;
+  user-select: none;
+}
+.splash__dontshow input[type="checkbox"] {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--hex-line);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.splash__dontshow input[type="checkbox"]:hover {
+  border-color: var(--hex-glow);
+}
+.splash__dontshow input[type="checkbox"]:checked {
+  border-color: var(--hex-glow);
+  background: rgba(124, 255, 178, 0.15);
+}
+.splash__dontshow input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  background: var(--hex-glow);
+  box-shadow: 0 0 4px var(--hex-glow);
+  border-radius: 1px;
+}
+.splash__dontshow:hover { color: var(--hex-glow); }
+
+@keyframes hex-splash-hint {
+  0%, 100% {
+    opacity: 0.40;
+    color: var(--hex-line);
+  }
+  50% {
+    opacity: 1;
+    color: var(--hex-glow);
+    text-shadow: 0 0 6px var(--hex-glow-dim);
+  }
+}
+
+/* Respect reduced-motion: no pulse, just a steady mid-brightness. */
+@media (prefers-reduced-motion: reduce) {
+  .splash__hint {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* ─── Retro CRT power on / off animation ─────────────────────────────────
+ * Applied to <body>. Three stages, each on `transform`/`opacity`/`filter`
+ * so the animation lives entirely on the GPU compositor (no layout, no
+ * repaint). The "off" effect mirrors what a real CRT TV did:
+ *   1. Brief brightness flash + slight horizontal squeeze (the picture
+ *      tube discharge).
+ *   2. Vertical collapse to a thin horizontal line (raster shutdown).
+ *   3. Horizontal collapse to a center dot + fade.
+ *
+ * The "on" effect is the reverse, with a quick over-bright bloom at the
+ * end where the phosphor recovers. Total durations are picked so the
+ * power-on (~700ms) feels snappier than the power-off (~600ms), which
+ * matches how real CRTs ramped up vs ramping down.
+ *
+ * Class names are toggled by renderer.js around the BrowserWindow life
+ * events; CSS does the rest.
+ */
+
+@keyframes hex-crt-on {
+  0% {
+    transform: scaleX(0.001) scaleY(0.005);
+    filter: brightness(0) contrast(2.4);
+    opacity: 0;
+  }
+  35% {
+    /* Single bright horizontal scanline. */
+    transform: scaleX(1) scaleY(0.005);
+    filter: brightness(2.5) contrast(1.4);
+    opacity: 1;
+  }
+  60% {
+    /* Raster fills out vertically, still over-bright. */
+    transform: scaleX(1) scaleY(1);
+    filter: brightness(1.6) contrast(1.2);
+    opacity: 1;
+  }
+  85% {
+    filter: brightness(1.15) contrast(1.05);
+  }
+  100% {
+    transform: scaleX(1) scaleY(1);
+    filter: brightness(1) contrast(1);
+    opacity: 1;
+  }
+}
+
+@keyframes hex-crt-off {
+  0% {
+    transform: scaleX(1) scaleY(1);
+    filter: brightness(1) contrast(1);
+    opacity: 1;
+  }
+  20% {
+    /* Picture-tube discharge flash. */
+    filter: brightness(2.2) contrast(1.4);
+    transform: scaleX(1) scaleY(1);
+    opacity: 1;
+  }
+  40% {
+    /* Vertical raster collapses to a horizontal line. */
+    transform: scaleX(1) scaleY(0.006);
+    filter: brightness(2.8) contrast(1.6);
+    opacity: 1;
+  }
+  85% {
+    /* Horizontal line shrinks to a center dot. */
+    transform: scaleX(0.001) scaleY(0.006);
+    filter: brightness(3.6) contrast(1.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(0) scaleY(0);
+    filter: brightness(0);
+    opacity: 0;
+  }
+}
+
+/* Body becomes the animation host. We set `transform-origin: center` and
+   `will-change` so the compositor keeps a fast layer ready for the
+   transform sequence. */
+body.crt-boot,
+body.crt-shutdown {
+  transform-origin: 50% 50%;
+  will-change: transform, filter, opacity;
+  /* Black backdrop showing through the collapse so the geometry reads
+     correctly against the desktop. */
+  background: #000;
+}
+
+body.crt-boot     { animation: hex-crt-on  700ms cubic-bezier(.25,.65,.20,1) both; }
+body.crt-shutdown { animation: hex-crt-off 600ms cubic-bezier(.55,.05,.85,.30) both; }
+
+/* Staged-boot mode.
+ *
+ * When the splash auto-opens on launch we want it on screen ALONE while
+ * it plays its own CRT-on. The terminal / HUD frame / scanlines / grid
+ * are siblings of the splash; we hide them via this body class until
+ * the splash finishes dismissing. JS then swaps to `crt-revealing`,
+ * which un-hides them with the same CRT-on animation. The `:not(.splash)`
+ * keeps the splash itself visible during the staged phase.
+ *
+ * z-index isn't enough on its own because the terminal text would still
+ * peek through the splash's translucent layers; we use visibility (not
+ * display:none) so xterm.js's first-fit measurements don't fail.
+ */
+body.crt-staged > *:not(.splash):not(script):not(link) {
+  visibility: hidden;
+}
+
+body.crt-revealing > *:not(.splash):not(script):not(link) {
+  animation: hex-crt-on 700ms cubic-bezier(.25,.65,.20,1) both;
+  transform-origin: 50% 50%;
+  will-change: transform, filter, opacity;
+}
+
+/* Reduced-motion users get a clean fade only — same intent (in/out),
+   no scale theatrics. */
+@media (prefers-reduced-motion: reduce) {
+  body.crt-boot     { animation: none; opacity: 1; }
+  body.crt-shutdown { animation: hex-crt-fade-out 200ms ease-out both; }
+  @keyframes hex-crt-fade-out { to { opacity: 0; } }
+}

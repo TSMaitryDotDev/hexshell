@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.bun/
+.bun-cache/
+
+# Fonts are downloaded by `bun run fonts` (or postinstall). They are large
+# binaries and not Hexshell's IP, so we don't track them in git.
+src/renderer/fonts/*.ttf
+src/renderer/fonts/*.woff2
+
+# Glyphnames cheat-sheet: regenerated from upstream by
+# `bun run glyphs` (postinstall). Excluded from git so contributors always
+# pull the latest version that matches the bundled font.
+src/main/shell/glyphnames.generated.json
+
+# Distro logos bundled from simple-icons by `bun run logos` (postinstall).
+# Regenerated on each install; not tracked in git.
+src/renderer/os-logos.generated.json
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.log
+.DS_Store

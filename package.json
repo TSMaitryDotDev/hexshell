@@ -1,0 +1,63 @@
+{
+  "name": "hexshell",
+  "version": "0.1.0",
+  "description": "Hexshell — a fullscreen sci-fi terminal built on Electron, xterm.js and node-pty.",
+  "private": true,
+  "main": "src/main/main.js",
+  "homepage": "https://github.com/hexshell/hexshell",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hexshell/hexshell.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hexshell/hexshell/issues"
+  },
+  "author": {
+    "name": "Hexshell"
+  },
+  "license": "MIT",
+  "packageManager": "bun@1.1.34",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "fonts": "bun scripts/fetch-fonts.mjs",
+    "glyphs": "bun scripts/fetch-glyphnames.mjs",
+    "logos": "bun scripts/fetch-simple-icons.mjs",
+    "icon": "rsvg-convert -w 512 -h 512 build/icon.svg -o build/icon.png",
+    "postinstall": "bun run fonts && bun run glyphs && bun run logos && electron-builder install-app-deps",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --linux",
+    "dist:appimage": "electron-builder --linux AppImage",
+    "dist:deb": "electron-builder --linux deb",
+    "dist:rpm": "electron-builder --linux rpm",
+    "dist:pacman": "electron-builder --linux pacman",
+    "dist:tar": "electron-builder --linux tar.xz",
+    "dist:all": "electron-builder --linux AppImage deb rpm pacman tar.xz",
+    "checksums": "bun scripts/checksums.mjs",
+    "release": "bun scripts/release.mjs",
+    "clean": "rm -rf dist node_modules .bun"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3",
+    "simple-icons": "^16.21.0"
+  },
+  "trustedDependencies": [
+    "electron",
+    "electron-builder",
+    "@electron/rebuild",
+    "node-pty"
+  ],
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=20"
+  }
+}

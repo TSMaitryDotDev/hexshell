@@ -1,0 +1,114 @@
+/* -------------------------------------------------------------------------
+   Terminal layout + xterm.js theming.
+   We keep effects OFF the live text. No filters, no blurs, no transforms on
+   the xterm canvas/DOM — those wreck text crispness and cost GPU time. All
+   sci-fi effects live in hud.css and sit ABOVE the terminal as overlays.
+   ------------------------------------------------------------------------- */
+
+:root {
+  /* Phosphor palette */
+  --hex-bg:        #000a06;
+  --hex-bg-deep:   #00060a;
+  --hex-fg:        #a8ffb0;
+  --hex-glow:      #7cffb2;
+  --hex-glow-dim:  rgba(124, 255, 178, 0.35);
+  --hex-line:      rgba(124, 255, 178, 0.18);
+  --hex-line-soft: rgba(124, 255, 178, 0.08);
+  --hex-accent:    #7afff0;
+  --hex-warn:      #f2ff7a;
+  --hex-error:     #ff5577;
+
+  /* Layout knobs */
+  --hud-pad:        28px;
+  --hud-radius:    14px;
+  --hud-titlebar:  56px;       /* taller so the SYSTEM button has breathing room */
+  --hud-gap:        10px;      /* gap between titlebar bottom and terminal panel */
+}
+
+.terminal-shell {
+  position: fixed;
+  /* Top edge sits BELOW the titlebar with a small visual gap so the two
+     borders don't kiss; --hud-gap controls that breathing room. */
+  inset: calc(var(--hud-titlebar) + var(--hud-gap)) var(--hud-pad) var(--hud-pad) var(--hud-pad);
+  background: var(--hex-bg);
+  border-radius: 10px;
+  overflow: hidden;
+  /* A single, cheap inset glow — no box-shadow blur on every frame. */
+  box-shadow:
+    inset 0 0 0 1px var(--hex-line),
+    inset 0 0 60px rgba(124, 255, 178, 0.06);
+  /* Promote to its own compositor layer so scanline overlays don't repaint
+     terminal text. */
+  isolation: isolate;
+  contain: layout paint;
+}
+
+.terminal {
+  position: absolute;
+  inset: 8px;
+  background: transparent;
+  /* I-beam cursor over the terminal so it's obvious you can drag-select. */
+  cursor: text;
+}
+
+/* xterm.js viewport tweaks ------------------------------------------------ */
+.xterm,
+.xterm-viewport,
+.xterm-screen {
+  background: transparent !important;
+}
+
+.xterm .xterm-viewport {
+  /* Thin sci-fi scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--hex-glow-dim) transparent;
+}
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--hex-glow-dim);
+  border-radius: 4px;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--hex-glow);
+}
+
+/* Cursor: a clean block, no glow filter (would cost GPU per-frame). The
+   xterm renderer already paints with the cursor color from theme. */
+.xterm .xterm-cursor-layer {
+  opacity: 1;
+}
+
+/* Smooth blink (block / bar / underline).
+ *
+ * xterm injects a runtime stylesheet that drives the blink with
+ * `animation: <kf> 1s step-end infinite`. step-end produces a hard
+ * on/off flip — that's where the "twitchy" feel came from.
+ *
+ * Strategy:
+ *   1. Override xterm's animation timing on the focused cursor only,
+ *      keeping the same 1s period but switching to `ease-in-out` and
+ *      defining our own keyframes.
+ *   2. Don't touch the unfocused (`outline`) cursor — it doesn't blink.
+ *
+ * `!important` on the animation property is required because xterm's
+ * rule has equal specificity and was injected later. Animation NAME
+ * must differ from xterm's so we don't collide on the keyframe lookup. */
+@keyframes hex-cursor-blink {
+  0%, 45%   { opacity: 1; }
+  55%, 95%  { opacity: 0; }
+  100%      { opacity: 1; }
+}
+
+.xterm .xterm-cursor-layer .xterm-cursor.xterm-cursor-blink {
+  animation: hex-cursor-blink 1s ease-in-out infinite !important;
+}
+
+/* Selection should stay readable; xterm sets the BG, we just confirm fg. */
+.xterm .xterm-selection {
+  /* Handled by theme.selectionBackground in renderer.js */
+}

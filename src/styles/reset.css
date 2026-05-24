@@ -1,0 +1,39 @@
+/* -------------------------------------------------------------------------
+   Minimal reset.
+   We only neutralize what gets in our way; we do not import normalize.css
+   because the renderer is a single-page Electron view, not the open web.
+   ------------------------------------------------------------------------- */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: #000;
+  color: #a8ffb0;
+  overflow: hidden;
+  /* Disable rubber-band overscroll and accidental selection of HUD chrome. */
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Restore selection inside the actual terminal so users can copy text. */
+.terminal,
+.terminal * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Kill the focus ring on the body — xterm draws its own cursor. */
+:focus { outline: none; }
+
+/* Prevent the OS drag-from-text behavior on chrome elements. */
+img, svg, .hud-frame, .hud-grid, .hud-scan, .hud-flicker {
+  -webkit-user-drag: none;
+  user-select: none;
+}

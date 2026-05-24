@@ -1,0 +1,109 @@
+appId: dev.hexshell.app
+productName: Hexshell
+copyright: Copyright © 2026 Hexshell contributors
+asar: true
+# node-pty ships a native .node binary; it must NOT live inside asar or
+# Node can't dlopen it at runtime.
+asarUnpack:
+  - "node_modules/node-pty/**/*"
+
+directories:
+  output: dist
+  buildResources: build
+
+# Files to include in the packaged app.
+# Note: do NOT add *.ttf or *.wav to the exclude list; the MesloLGL fonts
+# under src/renderer/fonts/ and the audio assets under src/audio/ must ship.
+files:
+  - "src/**/*"
+  - "package.json"
+  - "!**/{.git,.github,.vscode,test,tests,__tests__,docs}"
+  - "!**/*.{md,map,ts}"
+
+# Linux build matrix.
+# Each target produces a different package format. They all share the same
+# desktop integration (icon, .desktop file, MIME type associations).
+linux:
+  category: System
+  synopsis: Sci-fi fullscreen terminal
+  description: |
+    Hexshell is a fullscreen cyberpunk-styled terminal emulator with its
+    own interactive shell (hexsh). Built on Electron, xterm.js and
+    node-pty. Inspired by the look of eDEX-UI, stripped to one focused
+    thing: a beautiful real terminal.
+  vendor: Hexshell
+  maintainer: Hexshell <hexshell@example.invalid>
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  executableName: hexshell
+  desktop:
+    entry:
+      Name: Hexshell
+      GenericName: Terminal Emulator
+      Comment: Sci-fi fullscreen terminal
+      Categories: System;TerminalEmulator;Utility;
+      Keywords: terminal;shell;hexsh;cyberpunk;edex;
+      Terminal: false
+      StartupNotify: true
+      StartupWMClass: Hexshell
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: rpm
+      arch: [x64, arm64]
+    - target: pacman
+      arch: [x64, arm64]
+    - target: tar.xz
+      arch: [x64, arm64]
+
+# Per-format options ---------------------------------------------------------
+
+appImage:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+deb:
+  packageCategory: utils
+  priority: optional
+  # Runtime deps for Electron/Chromium shared libs that aren't in libc6.
+  # libnss3 & libgbm1 are the usual suspects on Debian/Ubuntu containers.
+  depends:
+    - libnotify4
+    - libnss3
+    - libxtst6
+    - libatspi2.0-0
+    - libuuid1
+    - libdrm2
+    - libgbm1
+    - libxkbcommon0
+    - libsecret-1-0
+    - xdg-utils
+
+rpm:
+  # Most Fedora/RHEL distros provide these under slightly different names;
+  # rpmbuild's dependency resolver maps libnss3.so etc. correctly when
+  # left implicit. We list only top-level package names that are stable.
+  depends:
+    - libnotify
+    - libXtst
+    - libuuid
+    - at-spi2-core
+    - libdrm
+    - mesa-libgbm
+    - libxkbcommon
+    - libsecret
+
+pacman:
+  # Arch's libraries follow upstream naming; deps are loose because most
+  # users have these from their base install.
+  depends:
+    - libnotify
+    - nss
+    - libxtst
+    - util-linux-libs
+    - at-spi2-core
+    - libdrm
+    - libxkbcommon
+    - libsecret
+
+# Windows / macOS targets are intentionally not built for this release.
