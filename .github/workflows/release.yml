@@ -63,7 +63,13 @@ jobs:
           # electron-builder uses these to pin the architecture per matrix
           # entry. Without them it would build for the runner's arch only.
           USE_HARD_LINKS: 'false'
-        run: bun run dist:all -- --${{ matrix.arch }}
+          # `electron-builder` auto-publishes to GitHub Releases when it
+          # detects a tag context AND a GH token. We do publishing in the
+          # separate `release` job below using softprops/action-gh-release,
+          # so we explicitly disable e-b's publishing path here.
+          # `EP_DRAFT=true` would also work but `--publish never` is the
+          # documented opt-out.
+        run: bun run dist:all -- --${{ matrix.arch }} --publish never
 
       - name: Generate checksums
         run: bun run checksums
