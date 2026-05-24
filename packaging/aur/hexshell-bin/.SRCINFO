@@ -1,13 +1,10 @@
 pkgbase = hexshell-bin
 	pkgdesc = Fullscreen sci-fi terminal with its own interactive shell (hexsh)
 	pkgver = 0.1.0
-	pkgrel = 1
-	url = https://github.com/hexshell/hexshell
+	pkgrel = 2
+	url = https://github.com/TSMaitryDotDev/hexshell
 	arch = x86_64
-	arch = aarch64
 	license = MIT
-	makedepends = binutils
-	makedepends = imagemagick
 	depends = libnotify
 	depends = nss
 	depends = libxtst
@@ -25,9 +22,7 @@ pkgbase = hexshell-bin
 	conflicts = hexshell
 	options = !strip
 	options = !debug
-	source_x86_64 = hexshell-0.1.0-x64.AppImage::https://github.com/hexshell/hexshell/releases/download/v0.1.0/Hexshell-0.1.0-x64.AppImage
-	source_aarch64 = hexshell-0.1.0-arm64.AppImage::https://github.com/hexshell/hexshell/releases/download/v0.1.0/Hexshell-0.1.0-arm64.AppImage
-	sha256sums_x86_64 = SKIP
-	sha256sums_aarch64 = SKIP
+	source = hexshell-0.1.0-x86_64.AppImage::https://github.com/TSMaitryDotDev/hexshell/releases/download/v0.1.0/Hexshell-0.1.0-x86_64.AppImage
+	sha256sums = SKIP
 
 pkgname = hexshell-bin
