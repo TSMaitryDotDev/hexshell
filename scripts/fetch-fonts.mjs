@@ -151,8 +151,10 @@ main().catch((err) => {
 //
 // We never need bold/italic/etc. as separate files because Orbitron has
 // no italic in its design and the variable axis lets us treat it as a
-// weight-axis font.
-const ORBITRON_FILE = 'Orbitron[wght].ttf';
+// weight-axis font. We rename the file at save time to drop the brackets
+// from the upstream filename — square brackets in CSS url() can stall
+// some font loaders, and the renamed file is what fonts.css references.
+const ORBITRON_FILE = 'Orbitron-Variable.ttf';
 const ORBITRON_URL  =
   'https://raw.githubusercontent.com/google/fonts/main/ofl/orbitron/Orbitron%5Bwght%5D.ttf';
 

@@ -45,13 +45,35 @@
   const staged = shouldStageBoot();
   if (staged) {
     document.body.classList.add('crt-staged');
+    // Chime fires when the splash opens (it owns the first visual). See
+    // the splash open call further down — we trigger via hexAudio there.
   } else {
     document.body.classList.add('crt-boot');
+    // Direct boot: terminal CRT-on is the first visible animation.
+    // Fire the chime synchronously with it. We call playStartup BEFORE
+    // attaching the animationend listener so audio dispatch and the
+    // animation start in the same task tick.
+    playStartupChime();
     document.body.addEventListener('animationend', function onBoot(e) {
       if (e.animationName !== 'hex-crt-on') return;
       document.body.classList.remove('crt-boot');
       document.body.removeEventListener('animationend', onBoot);
     });
+  }
+
+  /**
+   * Trigger the startup chime, once. Audio dispatch can run a few ms
+   * before the renderer paints, but xterm.js compositor scheduling means
+   * the user actually perceives them as simultaneous — exactly what we
+   * want.
+   */
+  let chimeFired = false;
+  function playStartupChime() {
+    if (chimeFired) return;
+    chimeFired = true;
+    if (window.hexAudio && typeof window.hexAudio.playStartup === 'function') {
+      window.hexAudio.playStartup();
+    }
   }
 
   /**
@@ -171,14 +193,28 @@
 
   async function bootTerminal() {
     try {
-      // `document.fonts.ready` resolves once every @font-face declared in
-      // CSS has either loaded or failed. With font-display: block this is
-      // also when the first paint with MesloLGL becomes safe.
+      // Wait for fonts, but cap the wait. `document.fonts.ready` is
+      // supposed to resolve when every declared face has loaded or
+      // failed. In practice some Chromium versions hang it indefinitely
+      // if a single @font-face uses an unknown format string — and a
+      // hanging boot leaves "LINK: ESTABLISHING" stuck forever.
+      //
+      // 500 ms is generous enough for any local-file font (Meslo + Orbitron
+      // total ~10 MB and read off SSD in <50 ms) and short enough that a
+      // misconfigured face never blocks the user. If the race times out,
+      // the terminal still boots — xterm just measures with whatever face
+      // happens to be loaded so far.
       if (document.fonts && document.fonts.ready) {
-        await document.fonts.ready;
-        // Belt-and-braces: explicitly request the face to make absolutely
-        // sure metrics are available before the very first measure.
-        try { await document.fonts.load('15px "MesloLGL"'); } catch (_) {}
+        await Promise.race([
+          document.fonts.ready,
+          new Promise((res) => setTimeout(res, 500))
+        ]);
+        try {
+          await Promise.race([
+            document.fonts.load('15px "MesloLGL"'),
+            new Promise((res) => setTimeout(res, 250))
+          ]);
+        } catch (_) {}
       }
     } catch (_) { /* fall through to fit anyway */ }
 
@@ -201,6 +237,10 @@
       try {
         if (staged) {
           sessionStorage.setItem(SPLASH_SESSION_KEY, '1');
+          // Fire the chime right as the splash opens — its CRT-on
+          // animation is what the user is about to see, so we sync
+          // audio to that moment instead of the terminal reveal.
+          playStartupChime();
           if (window.hexSplash && typeof window.hexSplash.open === 'function') {
             window.hexSplash.open({ boot: true });
           } else {

@@ -48,12 +48,19 @@
 }
 
 /* Orbitron — sci-fi display face used by the HUD clock. Variable-weight
- * TTF covers 400..900 in a single file, so we declare one face and let
- * the browser pick the weight via `font-weight` in CSS where it's used. */
+ * TTF covers 400..900 in a single file. We declare it with the standard
+ * `format("truetype")` rather than `truetype-variations`: the latter is
+ * a CSS Fonts Module Level 4 string that some Chromium builds reject,
+ * which can stall `document.fonts.ready` indefinitely. Plain "truetype"
+ * loads the variable file just fine; the browser picks the weight from
+ * the `font-weight` axis in CSS where it's used.
+ *
+ * font-display: swap so the boot sequence never blocks on this font.
+ * The terminal grid uses MesloLGL — Orbitron is HUD chrome only. */
 @font-face {
   font-family: "Orbitron";
   font-style: normal;
   font-weight: 400 900;
   font-display: swap;
-  src: url("./Orbitron%5Bwght%5D.ttf") format("truetype-variations");
+  src: url("./Orbitron-Variable.ttf") format("truetype");
 }

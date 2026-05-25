@@ -38,14 +38,46 @@
   const PROC_SRC    = '../audio/process.wav';
 
   // -------------------------------------------------------------------------
-  // Startup chime (HTMLAudioElement, simple)
+  // Startup chime
   // -------------------------------------------------------------------------
+  // Two-path strategy:
+  //   1. WebAudio (preferred): instant dispatch, no decode latency. Works
+  //      once initAudio() finishes the parallel decode (~50ms after page
+  //      load on Linux).
+  //   2. HTMLAudioElement (fallback): if the renderer fires playStartup()
+  //      before initAudio() resolves (rare; would only happen on a very
+  //      cold start), we fall back to the legacy path so the chime still
+  //      plays. ~30–80ms decode lag, but better than silence.
+  //
+  // Either way, we only fire once per session, gated by sessionStorage so
+  // reloads (Ctrl+Shift+R) don't re-play.
   function playStartup() {
     if (chimePlayed) return;
+    chimePlayed = true;
+    try { sessionStorage.setItem('hexshell.startupChimePlayed', '1'); } catch (_) {}
+
+    // Resume context if suspended (Chromium autoplay policy edge case).
+    if (ctx && ctx.state === 'suspended') {
+      try { ctx.resume(); } catch (_) {}
+    }
+
+    // Fast path: WebAudio with the pre-decoded buffer.
+    if (ctx && startupBuffer && startupGain) {
+      try {
+        const src = ctx.createBufferSource();
+        src.buffer = startupBuffer;
+        src.connect(startupGain);
+        src.start(0);
+        src.onended = () => { try { src.disconnect(); } catch (_) {} };
+        return;
+      } catch (_) { /* fall through to HTMLAudioElement */ }
+    }
+
+    // Slow path: HTMLAudioElement. Used when initAudio hasn't decoded
+    // the buffer yet, or WebAudio failed to initialise entirely.
     const audio = new Audio(STARTUP_SRC);
     audio.preload = 'auto';
-    audio.volume = 0.6;
-
+    audio.volume = 0.6 * masterScale;
     const p = audio.play();
     if (p && typeof p.catch === 'function') {
       p.catch((err) => {
@@ -57,8 +89,6 @@
     audio.addEventListener('ended', () => {
       try { audio.src = ''; } catch (_) {}
     }, { once: true });
-
-    try { sessionStorage.setItem('hexshell.startupChimePlayed', '1'); } catch (_) {}
   }
 
   // -------------------------------------------------------------------------
@@ -117,12 +147,16 @@
   let errBuffer = null;    // command-error
   /** @type {AudioBuffer | null} */
   let procBuffer = null;   // process loop
+  /** @type {AudioBuffer | null} */
+  let startupBuffer = null; // startup chime (low-latency WebAudio path)
   /** @type {GainNode | null} */
   let masterGain = null;   // for keysound
   /** @type {GainNode | null} */
   let errGain = null;      // for error chime
   /** @type {GainNode | null} */
   let procGain = null;     // for process loop
+  /** @type {GainNode | null} */
+  let startupGain = null;  // for startup chime
   /** @type {AudioBufferSourceNode | null} */
   let procSource = null;   // currently looping source, if any
   let lastClickAt = 0;
@@ -164,13 +198,20 @@
         procGain.gain.value = 0;
         procGain.connect(ctx.destination);
 
-        // Decode all three in parallel. If any fails individually, the
+        // Startup chime path. Lives on its own gain so masterScale can
+        // affect it without coupling to keysound's volume.
+        startupGain = ctx.createGain();
+        startupGain.gain.value = 0.6 * masterScale;
+        startupGain.connect(ctx.destination);
+
+        // Decode all four in parallel. If any fails individually, the
         // others still work — we don't want a missing sample to silence
         // the entire audio module.
-        const [keyBuf, errBuf, procBuf] = await Promise.allSettled([
+        const [keyBuf, errBuf, procBuf, startBuf] = await Promise.allSettled([
           decode(KEY_SRC),
           decode(ERR_SRC),
-          decode(PROC_SRC)
+          decode(PROC_SRC),
+          decode(STARTUP_SRC)
         ]);
         if (keyBuf.status === 'fulfilled')  buffer     = keyBuf.value;
         else if (typeof console !== 'undefined') {
@@ -183,6 +224,10 @@
         if (procBuf.status === 'fulfilled') procBuffer = procBuf.value;
         else if (typeof console !== 'undefined') {
           console.warn('[hexshell] process loop decode failed:', procBuf.reason && procBuf.reason.message);
+        }
+        if (startBuf.status === 'fulfilled') startupBuffer = startBuf.value;
+        else if (typeof console !== 'undefined') {
+          console.warn('[hexshell] startup chime decode failed:', startBuf.reason && startBuf.reason.message);
         }
         return true;
       } catch (err) {
@@ -262,6 +307,7 @@
     const t = ctx.currentTime;
     if (masterGain) masterGain.gain.setTargetAtTime(KEY.VOLUME * masterScale, t, 0.01);
     if (errGain)    errGain.gain.setTargetAtTime(ERR.VOLUME * masterScale, t, 0.01);
+    if (startupGain) startupGain.gain.setTargetAtTime(0.6 * masterScale, t, 0.01);
     // procGain is dynamic; we let processStart/Stop handle ramps and pick
     // the new ceiling on the next start. If the loop is currently active
     // we DO update its target so the slider feels responsive.
@@ -394,9 +440,10 @@
   // -------------------------------------------------------------------------
 
   function boot() {
-    playStartup();
     // Kick off audio init in the background. It usually finishes in
-    // under 50ms on Linux for these small WAVs.
+    // under 50ms on Linux for these small WAVs. We DO NOT play the
+    // startup chime here — renderer.js triggers it synchronously with
+    // the CRT power-on animation so the audio and visuals are aligned.
     initAudio();
   }
 
@@ -412,6 +459,8 @@
     error,
     processStart,
     processStop,
+    playStartup,         // explicit trigger, called from renderer.js so
+                         // the chime aligns with the CRT power-on visual
     setVolume,           // alias for setMasterVolume; kept for back-compat
     setMasterVolume,
     setEnabled

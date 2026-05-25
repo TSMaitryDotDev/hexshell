@@ -5,6 +5,26 @@ All notable changes to Hexshell are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.2] — 2026-05-24
+
+Hotfix on top of 0.1.1.
+
+### Fixed
+
+- **Renderer no longer hangs on boot.** The Orbitron `@font-face`
+  declaration used `format("truetype-variations")`, a CSS Fonts Level 4
+  string some Chromium builds reject — which stalled
+  `document.fonts.ready` indefinitely and left the terminal stuck on
+  `LINK: ESTABLISHING` with the prompt never appearing.
+- Use `format("truetype")` instead; variable axes work fine without the
+  level-4 hint.
+- Renamed bundled font from `Orbitron[wght].ttf` to
+  `Orbitron-Variable.ttf` because square brackets in CSS `url()` trip
+  some font loaders.
+- Added a 500 ms timeout race to `await document.fonts.ready` in
+  `bootTerminal()` so a future broken font declaration can never leave
+  the renderer stuck again.
+
 ## [0.1.1] — 2026-05-24
 
 Polish pass on top of 0.1.0.
