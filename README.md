@@ -4,270 +4,208 @@ A fullscreen sci-fi terminal built on **Electron**, **xterm.js** and **node-pty*
 
 No widgets. No system monitor. No tabs. Just a phosphor-green CRT that runs your shell.
 
+![status](https://img.shields.io/github/v/release/TSMaitryDotDev/hexshell?label=release)
+![license](https://img.shields.io/badge/license-MIT-green)
+![platform](https://img.shields.io/badge/platform-Linux-blue)
+
 ## Install
+
+All download URLs use `/releases/latest/` so they always pull the newest version. Replace `latest` with a specific tag like `v0.1.3` if you want to pin.
 
 ### Arch Linux (recommended)
 
 ```bash
-paru -S hexshell-bin   # or: yay -S hexshell-bin
+paru -S hexshell-bin    # or: yay -S hexshell-bin
 ```
 
-The AUR `-bin` package wraps the pre-built AppImage. Auto-updates flow through your AUR helper; no Electron rebuild required (which would otherwise take hours and 10+ GB of scratch space).
+The AUR `-bin` package wraps the prebuilt AppImage. Auto-updates flow through your AUR helper; no Electron rebuild needed (which would otherwise take hours and 10+ GB scratch).
 
-If you prefer the `.pacman` directly:
+If you'd rather drop in a `.pacman` directly:
 
 ```bash
-curl -LO https://github.com/hexshell/hexshell/releases/download/v0.1.0/Hexshell-0.1.0-x64.pacman
-sudo pacman -U Hexshell-0.1.0-x64.pacman
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.pacman
+sudo pacman -U Hexshell-*-x64.pacman
 ```
 
-### Debian, Ubuntu, Mint, Pop!_OS, Kali
+### Debian / Ubuntu / Mint / Pop!_OS / Kali
 
 ```bash
-curl -LO https://github.com/hexshell/hexshell/releases/download/v0.1.0/hexshell_0.1.0_amd64.deb
-sudo apt install ./hexshell_0.1.0_amd64.deb
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-amd64.deb
+sudo apt install ./Hexshell-*-amd64.deb
 ```
 
-### Fedora, RHEL, openSUSE, Mageia
+`apt install ./<file>.deb` (with the `./`) pulls runtime dependencies; `dpkg -i` on its own won't.
+
+### Fedora / RHEL / openSUSE / Rocky / Alma
 
 ```bash
-sudo dnf install https://github.com/hexshell/hexshell/releases/download/v0.1.0/hexshell-0.1.0.x86_64.rpm
+sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.rpm
 ```
+
+(Substitute `zypper`, `rpm -i`, etc. as appropriate for your distro.)
 
 ### Any Linux (AppImage)
 
 ```bash
-curl -LO https://github.com/hexshell/hexshell/releases/download/v0.1.0/Hexshell-0.1.0-x64.AppImage
-chmod +x Hexshell-0.1.0-x64.AppImage
-./Hexshell-0.1.0-x64.AppImage
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.AppImage
+chmod +x Hexshell-*.AppImage
+./Hexshell-*.AppImage
 ```
+
+The AppImage is self-mounting via FUSE and runs on any Linux with glibc 2.17+ (CentOS 7, Ubuntu 14.04, anything newer).
 
 ### Manual / unsupported distros (tar.xz)
 
 ```bash
-curl -LO https://github.com/hexshell/hexshell/releases/download/v0.1.0/Hexshell-0.1.0-x64.tar.xz
-sudo tar -xJf Hexshell-0.1.0-x64.tar.xz -C /opt
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.tar.xz
+sudo tar -xJf Hexshell-*-x64.tar.xz -C /opt
 sudo ln -s /opt/Hexshell/hexshell /usr/local/bin/hexshell
+# Optional: setuid the sandbox helper for proper Chromium isolation.
+sudo chmod 4755 /opt/Hexshell/chrome-sandbox
 ```
-
-ARM64 builds (`-arm64.AppImage`, `_arm64.deb`, `.aarch64.rpm`, `.aarch64.pacman`, `-arm64.tar.xz`) are published alongside x64.
 
 ### Verify downloads
 
-Every release ships `SHA256SUMS`:
+Every release ships a `SHA256SUMS` file:
 
 ```bash
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
 ## Features
 
-- **hexsh** — built-in interactive shell. No bash, no zsh, no fish.
-  - Single-line phosphor prompt with cwd + last-exit indicator
-  - Live syntax highlighting (known cmd green, unknown red, strings yellow, vars cyan, ops magenta)
-  - Fish-style autosuggestions from history (accept with → / End)
-  - Tab completion for commands (PATH + builtins + aliases) and file paths
-  - Persistent history at `~/.local/share/hexshell/history` (5000 entries, deduped)
-  - Builtins: `cd`, `pwd`, `export`, `unset`, `alias`, `unalias`, `history`, `clear`, `which`, `set`, `help`, `exit`
-  - Operators: `;` `&&` `||` `|` `>` `>>` `<` `2>` `&`
-  - External programs run through ephemeral PTYs, so `vim`, `htop`, `btop`, `git log`, `less` all work with full color
-- Frameless, fullscreen Electron window
-- Bundled **MesloLGL Nerd Font Mono** — powerline glyphs and icons (starship / p10k / lsd) work out of the box
-- Cyberpunk HUD: static frame, corner brackets, CRT scanlines, subtle flicker, grid overlay
-- xterm.js with FitAddon, web-links, 256/truecolor, unicode, 5000-line scrollback
-- GPU-friendly CSS effects (transform/opacity only, no per-frame filters)
-- Hardened Electron: `contextIsolation: true`, `nodeIntegration: false`, no remote, strict CSP, validated IPC
-- Resize coalesced to one rAF; only sends IPC when cell dims actually change
-
-## Why Bun (and what Bun is *not* doing here)
-
-Bun is the **package manager and task runner** for this project. It installs faster than npm, gives us a single deterministic `bun.lock`, and runs scripts directly.
-
-Bun does **not** replace Electron's runtime. When you launch the app, Electron uses its own bundled Node/V8 for the main process and Chromium for the renderer. The source code under `src/` is plain CommonJS that Electron executes; Bun just orchestrates dependencies and scripts around it.
-
-## Requirements (Arch Linux)
-
-```bash
-# Bun
-curl -fsSL https://bun.sh/install | bash
-# or: paru -S bun-bin   (AUR)
-
-# Native build toolchain for node-pty + unzip for the font fetcher
-sudo pacman -S --needed base-devel python git unzip
-```
-
-You do not need Node installed; Bun ships its own JavaScript runtime, and Electron carries its own Node binary internally.
-
-## Build from source
-
-```bash
-git clone https://github.com/hexshell/hexshell
-cd hexshell
-bun install         # respects trustedDependencies in package.json:
-                    #   - downloads the Electron binary
-                    #   - builds node-pty native bindings
-                    #   - postinstall runs `bun run fonts` (downloads
-                    #     MesloLGL Nerd Font Mono into src/renderer/fonts)
-                    #   - then runs electron-builder install-app-deps to
-                    #     rebuild node-pty against Electron's Node ABI
-bun run start
-```
-
-If you ever see `Error: The module ... was compiled against a different Node.js version`:
-
-```bash
-bun run rebuild
-```
-
-### Why `trustedDependencies` matters
-
-Bun blocks lifecycle scripts (`postinstall`, native builds) by default — a supply-chain mitigation. Hexshell needs them for `electron`, `node-pty`, `@electron/rebuild`, and `electron-builder`. They're listed under `trustedDependencies` in `package.json`, so `bun install` runs only those scripts and refuses to run lifecycle scripts from anything else.
-
-## Fonts
-
-Hexshell bundles **MesloLGL Nerd Font Mono** so terminal prompts that use powerline / Nerd Font icons (starship, powerlevel10k, oh-my-zsh themes, `lsd`, `eza`) render correctly with no system font setup.
-
-The TTFs are not committed to git. They're fetched on `bun install` (or via `bun run fonts` on demand) from the [Nerd Fonts release](https://github.com/ryanoasis/nerd-fonts/releases) into `src/renderer/fonts/`. The renderer awaits `document.fonts.ready` before xterm.js measures cell size, so the grid never reflows when the font loads.
-
-Licensing: Meslo is Apache-2.0 (Andre Berg, based on Apple's Menlo / Bitstream Vera Sans Mono). The Nerd Fonts patches are SIL OFL 1.1. Both permit redistribution; `LICENSE.font` files travel with the AppImage.
-
-If you'd rather use a different face, edit `src/renderer/fonts/fonts.css` and the `fontFamily` field in `src/renderer/renderer.js`. Anything monospaced will work; xterm needs accurate cell metrics, which means a true monospace face (not a "ligatures everywhere" variable-width one).
+- **hexsh** — built-in interactive shell. No bash / zsh / fish dependency.
+  - Fish-style autosuggestions from history, accept with `→` or End.
+  - Tab completion for commands (`PATH` + builtins + aliases) and file paths.
+  - Live syntax highlighting (commands green/red by existence, strings yellow, vars cyan, ops magenta).
+  - Persistent history at `~/.local/share/hexshell/history` — 5000 entries, deduped.
+  - Builtins: `cd`, `pwd`, `export`, `unset`, `alias`, `unalias`, `history`, `clear`, `which`, `set`, `help`, `exit`, `ls` / `ll` / `la`, `sys`.
+  - Operators: `;`, `&&`, `||`, `|`, `>`, `>>`, `<`, `2>`, `&`.
+  - External programs run through ephemeral `node-pty` sessions — `vim`, `htop`, `btop`, `git log`, `less` all work with full color and resize.
+- **Frameless fullscreen window** with a cyberpunk HUD: animated frame, corner brackets, CRT scanlines, subtle flicker, grid overlay.
+- **Bundled fonts** — MesloLGL Nerd Font Mono (terminal grid) + Orbitron (HUD clock). Powerline glyphs and Nerd Font icons (starship, p10k, lsd, eza) work out of the box.
+- **OS splash** with official distro logos from [Simple Icons](https://simpleicons.org/), fastfetch-class info readout (kernel / packages / DE / WM / theme / GPU / memory / disk / IP / locale).
+- **Settings modal** — cursor shape (block / I-beam / underline), audio toggles (key click / error chime / process loop), master volume.
+- **Audio** — startup chime, key click, command-error chime, ambient process loop during installs / downloads. WebAudio mixer with per-kind gain. Process loop only runs on real install activity (not during `sudo` password prompts).
+- **Retro CRT power-on / power-off** animations on launch and exit.
+- **Custom Nerd Font iconography system** for files, folders, languages, archives, etc. — backed by the upstream `glyphnames.json` cheat sheet.
+- **Hardened Electron**: `contextIsolation: true`, `nodeIntegration: false`, no remote, strict CSP, validated IPC.
 
 ## Keyboard shortcuts
 
-| Shortcut       | Action              |
-|----------------|---------------------|
-| `F11`          | Toggle fullscreen   |
-| `Ctrl+Shift+R` | Reload (resets PTY) |
-| `Ctrl+Shift+Q` | Quit                |
+| Shortcut         | Action                                       |
+| ---------------- | -------------------------------------------- |
+| `F11`            | Toggle fullscreen                            |
+| `Ctrl+Shift+R`   | Reload (resets the shell)                    |
+| `Ctrl+Shift+Q`   | Quit (with CRT shutdown animation)           |
+| `Ctrl+Shift+S`   | Screenshot via system tool (flameshot, etc.) |
+| `Ctrl+Shift+C`   | Copy selection                               |
+| `Ctrl+Shift+V`   | Paste from clipboard                         |
+| Right-click      | Copy selection if any, else paste            |
+| Middle-click     | Paste from PRIMARY (X11/Wayland)             |
+| `Ctrl+C`         | SIGINT to running command (untouched)        |
 
 Everything else is forwarded straight to your shell.
+
+## Build from source
+
+You generally don't need to — install via your distro's package manager above. But if you want to hack on it:
+
+```bash
+# 1. Install Bun (if not already)
+curl -fsSL https://bun.sh/install | bash
+# or: paru -S bun-bin   (AUR)
+
+# 2. Install build toolchain
+sudo pacman -S --needed base-devel python git unzip librsvg     # Arch
+sudo apt install build-essential python3 git unzip librsvg2-bin # Debian
+
+# 3. Clone + install
+git clone https://github.com/TSMaitryDotDev/hexshell
+cd hexshell
+bun install        # downloads Electron + node-pty + fonts + glyphs + logos
+bun run start
+```
+
+`bun install` runs lifecycle scripts only for the four packages we vetted (`electron`, `electron-builder`, `@electron/rebuild`, `node-pty`) — see `trustedDependencies` in `package.json`. Everything else is blocked by Bun's supply-chain default.
+
+You **don't** need Node installed; Bun ships its own JavaScript runtime, and Electron carries its own Node binary internally.
+
+### Common scripts
+
+```bash
+bun run start             # launch in dev mode
+bun run dev               # same with --enable-logging
+bun run rebuild           # rebuild node-pty for current Electron version
+bun run fonts             # re-download MesloLGL + Orbitron
+bun run glyphs            # re-fetch Nerd Fonts glyphnames.json
+bun run logos             # re-bundle Simple Icons distro SVGs
+bun run dist:appimage     # build one format
+bun run dist:all          # build all five Linux formats
+bun run release           # one-shot driver: build + checksum + summary
+bun run clean             # nuke dist + node_modules + bun caches
+```
 
 ## Architecture
 
 ```
 src/
-├── main/
-│   ├── main.js        # Electron lifecycle + IPC + window
-│   └── shell/         # hexsh, the interactive shell
-│       ├── hexsh.js   # state machine: editing <-> running
-│       ├── editor.js  # line editor (keys, redraw, cursor math)
-│       ├── parser.js  # lossless tokenizer + pipeline parser
-│       ├── env.js     # vars, aliases, cwd, expansion, prompt
-│       ├── history.js # persistent history + autosuggest source
-│       ├── highlighter.js  # ANSI coloring driven by token stream
-│       ├── completer.js    # Tab completion + PATH cache
-│       ├── builtins.js     # cd / pwd / export / alias / etc.
-│       └── executor.js     # ephemeral node-pty per external command
-├── preload/   # contextBridge boundary
-├── renderer/  # xterm.js UI, no Node access
-├── ipc/       # shared channel names
-└── styles/    # reset, terminal theme, HUD chrome
+├── main/                    # Electron main process
+│   ├── main.js              # window + IPC + global shortcuts
+│   ├── screenshot.js        # detect + invoke system screenshot tool
+│   └── shell/               # hexsh — the in-process interactive shell
+│       ├── hexsh.js         # state machine: editing <-> running
+│       ├── editor.js        # line editor (keys, redraw, cursor math)
+│       ├── parser.js        # lossless tokenizer + pipeline parser
+│       ├── env.js           # vars, aliases, cwd, expansion, prompt
+│       ├── history.js       # persistent history + autosuggestion source
+│       ├── highlighter.js   # ANSI coloring driven by token stream
+│       ├── completer.js     # tab completion + PATH cache
+│       ├── builtins.js      # cd / pwd / export / alias / ls / sys / etc.
+│       ├── executor.js      # ephemeral node-pty per external command
+│       ├── icons.js         # file/folder Nerd Font icon mapping
+│       └── sysinfo.js       # gather OS / CPU / GPU / packages / DE / WM
+├── preload/preload.js       # contextBridge — the only renderer ↔ main seam
+├── renderer/                # xterm.js UI, no Node access
+│   ├── index.html           # locked-down CSP, layered HUD scaffolding
+│   ├── renderer.js          # xterm boot + IPC wiring + clock + cleanup
+│   ├── system.js            # SYSTEM menu + Settings modal + OS splash
+│   ├── audio.js             # WebAudio mixer (chime / click / error / loop)
+│   ├── os-logos.js          # bundled Simple Icons distro SVGs
+│   └── fonts/               # MesloLGL + Orbitron (downloaded by bun install)
+├── ipc/channels.js          # shared IPC channel names
+├── styles/                  # reset, terminal theme, HUD chrome
+└── audio/                   # bundled WAVs (startup, click, error, process)
 ```
 
 ### IPC flow
 
 ```
-xterm.onData ─▶ preload.write ─▶ ipc 'terminal:write' ─▶ main ─▶ pty.write
-pty.onData   ─▶ ipc 'terminal:data' ─▶ preload.onData ─▶ xterm.write
-ResizeObserver ─▶ preload.resize ─▶ ipc 'terminal:resize' ─▶ pty.resize
-pty.onExit   ─▶ ipc 'terminal:exit' ─▶ renderer banner
+xterm.onData ──▶ preload.write ──▶ ipc 'terminal:write' ──▶ main ──▶ pty.write
+pty.onData   ──▶ ipc 'terminal:data' ──▶ preload.onData ──▶ xterm.write
+ResizeObserver ──▶ preload.resize ──▶ ipc 'terminal:resize' ──▶ pty.resize
+shell-bell ──▶ ipc 'terminal:bell' ──▶ renderer hexAudio.{error|process-start|process-stop}
 ```
 
-Channel names live in `src/ipc/channels.js` so main, preload, and renderer cannot drift.
+Channel names live in `src/ipc/channels.js` so main, preload, and renderer can't drift.
 
-### PTY lifecycle
+### Shell lifecycle
 
-Hexsh has no long-lived shell process. Each external command (or pipeline) gets a fresh `node-pty` session that's disposed when the command exits. Single foreground commands are spawned directly; pipelines and redirections are routed through `/bin/sh -c` after we've done variable expansion. Builtins (`cd`, `export`, `alias`…) run inside the main process, never in a child.
+Hexsh has no long-lived shell process. Each external command (or pipeline) gets a fresh `node-pty` session that's disposed when the command exits. Single foreground commands spawn directly; pipelines and redirections route through `/bin/sh -c` after variable expansion. Builtins (`cd`, `export`, `alias`, …) run inside the main process — never in a child.
 
 ### Resize strategy
 
-A `ResizeObserver` on the terminal container schedules at most one `requestAnimationFrame` callback. That callback runs `fit.fit()`, computes proposed cols/rows, and only sends IPC if they differ from the last value sent.
+A `ResizeObserver` on the terminal container schedules at most one `requestAnimationFrame` callback. That callback runs `fit.fit()`, computes proposed cols/rows, and only sends IPC if they differ from the last value. Handles fullscreen toggles, drag-resizes, and DPI changes uniformly without flooding the PTY.
 
 ### Rendering strategy
 
-xterm.js uses its default DOM renderer. All sci-fi effects are CSS layers stacked above with `pointer-events: none`. Animations are `transform` and `opacity` only, so they live on the GPU compositor and don't trigger layout or text repaint.
+xterm.js uses its default DOM renderer. All sci-fi effects are CSS layers stacked above the terminal with `pointer-events: none`. Animations are `transform` and `opacity` only, so they live on the GPU compositor and don't trigger layout or text repaint. `prefers-reduced-motion` disables all animated overlays.
 
-## Packaging & releases (maintainers)
+## Maintainer / packaging docs
 
-Hexshell ships five Linux artifact formats per architecture, plus an AUR `-bin` package. CI does this automatically on every `v*.*.*` tag push.
-
-### Build all artifacts locally
-
-```bash
-bun run dist:all          # AppImage + deb + rpm + pacman + tar.xz
-bun run checksums         # writes dist/SHA256SUMS
-
-# Or one format at a time:
-bun run dist:appimage
-bun run dist:deb
-bun run dist:rpm
-bun run dist:pacman
-bun run dist:tar
-```
-
-You'll need a few system packages on the build host:
-
-```bash
-# Arch
-sudo pacman -S --needed rpm-tools dpkg fakeroot binutils xz librsvg unzip
-# Debian/Ubuntu
-sudo apt install rpm fakeroot dpkg-dev xz-utils librsvg2-bin unzip
-```
-
-`bun run icon` rasterises `build/icon.svg` to `build/icon.png` (electron-builder needs a 512×512 PNG; SVG icons would be re-rastered per format with worse hinting).
-
-### Cut a release
-
-```bash
-# 1. Bump version
-$EDITOR package.json
-git commit -am "chore: 0.2.0"
-
-# 2. Build + checksum
-bun run release           # refuses if working tree is dirty or tag exists
-
-# 3. Tag and push
-git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin main v0.2.0
-```
-
-The push triggers `.github/workflows/release.yml`, which builds x64 and arm64 in parallel and creates a draft GitHub Release with all artifacts and `SHA256SUMS` attached. Edit the notes, click Publish.
-
-### Update the AUR `-bin` package
-
-Lives in `packaging/aur/hexshell-bin/`. After a release:
-
-1. Edit `pkgver` in `PKGBUILD`.
-2. `updpkgsums` to rewrite `sha256sums_*` from the new release URLs.
-3. `makepkg --printsrcinfo > .SRCINFO`.
-4. Commit + push to the AUR git repo.
-
-### Why these formats
-
-- **AppImage** — universal Linux, no install needed, ideal "just works" path.
-- **.pacman** — first-class on Arch; `sudo pacman -U` integrates with the package db.
-- **AUR `-bin`** — the path most Arch users actually take; gets auto-updates via `paru`/`yay`.
-- **.deb** — Debian-family distros (~60% of Linux desktops).
-- **.rpm** — Red Hat-family distros.
-- **.tar.xz** — Slackware, Void, Gentoo, NixOS, anyone who wants to inspect or repack.
-
-## Common Bun commands
-
-```bash
-bun install              # install deps + run trusted lifecycle scripts
-bun run start            # launch Electron in dev mode
-bun run dev              # same with --enable-logging
-bun run fonts            # (re)download MesloLGL Nerd Font Mono
-bun run rebuild          # rebuild node-pty for current Electron version
-bun run dist:linux       # build AppImage
-bun run clean            # remove dist, node_modules, bun caches
-bun add <pkg>            # add a runtime dep
-bun add -d <pkg>         # add a dev dep
-bun update               # update lockfile
-bun pm ls                # list installed packages
-```
+For release flow, distro packaging notes, AUR push procedure, and recipes (hotfix release, AUR-only fix, rollback, etc.) see [`hexsh.md`](./hexsh.md).
 
 ## License
 
-MIT.
+[MIT](./LICENSE).
