@@ -362,7 +362,7 @@ In `package()`:
 
 > URLs in this section use `/releases/latest/download/` so they never
 > need bumping per release. GitHub redirects to the newest published
-> tag automatically. Replace `latest` with a tag name (e.g. `v0.1.3`)
+> tag automatically. Replace `latest` with a tag name (e.g. `v0.1.4`)
 > when you need to pin a specific release for a bug report or
 > reproducibility check.
 
@@ -376,14 +376,14 @@ paru -S hexshell-bin
 yay -S hexshell-bin
 
 # Direct .pacman (no auto-updates; one-shot install)
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.pacman
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x64.pacman
 sudo pacman -U Hexshell-*-x64.pacman
 ```
 
 ### 8.2. Debian / Ubuntu / Mint / Pop!_OS / Kali
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-amd64.deb
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-amd64.deb
 sudo apt install ./Hexshell-*-amd64.deb
 ```
 
@@ -393,7 +393,7 @@ because it pulls runtime dependencies for you.
 ### 8.3. Fedora / RHEL / openSUSE / Rocky / Alma
 
 ```bash
-sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.rpm
+sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x86_64.rpm
 # or zypper, or rpm -i
 ```
 
@@ -403,7 +403,7 @@ fpm; Arch's strict rpmbuild does not — see §9.1).
 ### 8.4. Any Linux (AppImage)
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.AppImage
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x86_64.AppImage
 chmod +x Hexshell-*.AppImage
 ./Hexshell-*.AppImage
 ```
@@ -415,7 +415,7 @@ clicking the file integrates it into your app menu.
 ### 8.5. Slackware / Void / Gentoo / NixOS / manual
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.tar.xz
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x64.tar.xz
 sudo tar -xJf Hexshell-*-x64.tar.xz -C /opt
 sudo ln -s /opt/Hexshell/hexshell /usr/local/bin/hexshell
 ```
@@ -535,6 +535,20 @@ If you ever see `LINK: ESTABLISHING` stuck again, open DevTools first
 thing — the first red Console error tells you the line that threw.
 Don't try to debug from screenshots; the stack trace is the source of
 truth.
+
+### 9.8. Titlebar items collide / get clipped on narrow windows
+
+- **Symptom**: At narrow widths the SHELL/LINK/version labels stack
+  awkwardly or push window controls past the right edge.
+- **Root cause**: Without a `minWidth` floor the user can drag the
+  window down to a width where everything in the titlebar can't fit,
+  and without responsive cascades the elements just clip.
+- **Fix**: `BrowserWindow` carries `minWidth: 850, minHeight: 500` so
+  the user can't get below the smallest workable size, and the CSS at
+  the bottom of `src/styles/hud.css` drops elements in three tiers
+  (1024 → 940 → 880px) by importance. SYSTEM, the clock, and the
+  window-control trio always survive — clicks on them are unaffected
+  by the window-drag region thanks to per-child `app-region: no-drag`.
 
 ---
 
@@ -656,7 +670,7 @@ verify the actual download path one more time:
 
 ```bash
 # 1. Publish the GitHub draft so URLs become anonymous-readable.
-gh release edit v0.1.3 --draft=false
+gh release edit v0.1.4 --draft=false
 
 # 2. Build the AUR package against the live release URL.
 bash -c "cd /tmp/hexshell-bin && cp ~/Projects/Hexshell/packaging/aur/hexshell-bin/PKGBUILD . && \

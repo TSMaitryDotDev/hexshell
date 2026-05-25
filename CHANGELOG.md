@@ -5,6 +5,30 @@ All notable changes to Hexshell are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.4] — 2026-05-26
+
+Quality-of-life pass on the titlebar — drag-anywhere window movement
+and a clean responsive cascade for narrow widths.
+
+### Added
+
+- **Drag-anywhere titlebar.** The whole top bar is now a window-drag
+  region (`-webkit-app-region: drag`), so you can grab any empty space
+  to move the window. All interactive children (SYSTEM, clock, window
+  controls, future buttons) opt out via `app-region: no-drag` so
+  clicks still hit them.
+- **Hard `minWidth` floor (850px) + `minHeight` (500px).** The
+  titlebar starts crowding below 850px and the terminal grid loses
+  legibility below 500px — the floor matches what was empirically
+  readable.
+- **Responsive titlebar tiers** that hide elements as the window gets
+  narrower, in order of decreasing importance:
+  - `≤1024px` — hide `//` separators and the version chip.
+  - `≤940px`  — also hide the `SHELL: hexsh` label.
+  - `≤880px`  — also hide `LINK:` and the `HEXSHELL` brand; tighten
+    SYSTEM padding, clock font, and window-control trio.
+  - `[ SYSTEM ]`, the clock, and `_ ▢ ✕` always stay visible.
+
 ## [0.1.3] — 2026-05-25
 
 Hotfix on top of 0.1.2.

@@ -30,8 +30,27 @@
     'audio.process':  true,
     'audio.volume':   45,    // 0..100; mapped to 0..1 for hexAudio
     'display.cursor': 'block', // 'block' | 'bar' | 'underline'
+    'display.theme':  'plasma-teal', // see :root[data-theme=...] in terminal.css
     'splash.skipBoot': false  // true => never auto-open OS splash on launch
   });
+
+  // -------------------------------------------------------------------------
+  // Audio helpers — thin wrappers around window.hexAudio so every open /
+  // click site doesn't have to repeat the existence check. The audio
+  // module may not have finished decoding the buffers when we fire (it
+  // runs in the background after page load), in which case the call
+  // is a no-op — fine, settings audio is decorative.
+  // -------------------------------------------------------------------------
+  function playMenuSound() {
+    if (window.hexAudio && typeof window.hexAudio.menu === 'function') {
+      window.hexAudio.menu();
+    }
+  }
+  function playUiClick() {
+    if (window.hexAudio && typeof window.hexAudio.uiClick === 'function') {
+      window.hexAudio.uiClick();
+    }
+  }
 
   // -------------------------------------------------------------------------
   // Prefs storage
@@ -76,6 +95,12 @@
       const allowed = ['block', 'bar', 'underline'];
       if (allowed.includes(shape)) window.hexTerminal.setCursorStyle(shape);
     }
+    // Display: theme. Same fallback: ignored cleanly if hexTerminal isn't up
+    // yet; renderer.js also reads this key at boot directly.
+    if (window.hexTerminal && typeof window.hexTerminal.setTheme === 'function') {
+      const themeName = prefs['display.theme'];
+      if (typeof themeName === 'string') window.hexTerminal.setTheme(themeName);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -91,6 +116,7 @@
     function openMenu() {
       menu.hidden = false;
       button.setAttribute('aria-expanded', 'true');
+      playMenuSound();
       // Focus first item so keyboard users can immediately arrow-navigate.
       if (items[0]) {
         items.forEach((el, i) => el.tabIndex = i === 0 ? 0 : -1);
@@ -168,9 +194,9 @@
     menu.addEventListener('click', (e) => {
       const item = e.target.closest('[data-action]');
       if (!item) return;
-      const action = item.dataset.action;
+      playUiClick();
       closeMenu();
-      runAction(action);
+      runAction(item.dataset.action);
     });
   }
 
@@ -243,6 +269,7 @@
         b.addEventListener('click', () => {
           const v = b.dataset.value;
           if (!v) return;
+          playUiClick();
           syncSelection(v);
           prefs = { ...prefs, [key]: v };
           savePrefs(prefs);
@@ -251,9 +278,18 @@
       }
     });
 
-    // Backdrop / X button close.
+    // Backdrop / X button close. Click sound on close button only —
+    // clicking the backdrop is "dismiss" rather than "select", so it
+    // gets the modal close animation but no audio click on top of it.
     modal.addEventListener('click', (e) => {
-      if (e.target.matches('[data-modal-close]')) closeSettings();
+      if (!e.target.matches('[data-modal-close]')) return;
+      // Distinguish between the X button (treated as a UI click) and the
+      // backdrop (no extra sound). The X has the explicit close button
+      // class; backdrop is .modal__backdrop.
+      if (e.target.classList.contains('modal__close')) {
+        playUiClick();
+      }
+      closeSettings();
     });
     document.addEventListener('keydown', (e) => {
       if (modalOpen && e.key === 'Escape') {
@@ -285,18 +321,42 @@
   function openSettings() {
     if (!modal) return;
     prevFocus = document.activeElement;
+    // Make sure no stale "closing" class remains from a previous close
+    // that got interrupted (e.g. user clicked SYSTEM → Settings again
+    // before the off-animation finished).
+    modal.classList.remove('modal--closing');
     modal.hidden = false;
     modalOpen = true;
+    playMenuSound();
     // Focus the first input for keyboard users.
     const first = modal.querySelector('input,button');
     if (first) first.focus();
   }
 
   function closeSettings() {
-    if (!modal) return;
-    modal.hidden = true;
+    if (!modal || !modalOpen) return;
     modalOpen = false;
-    if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
+    // Play the CRT shutdown animation, then hide. animationend fires
+    // multiple times on a panel (header, body etc. inherit), so we
+    // filter by name and act on the first matching event.
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      modal.classList.remove('modal--closing');
+      modal.hidden = true;
+      if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
+    };
+    const onAnim = (e) => {
+      if (e.animationName !== 'hex-crt-off') return;
+      modal.removeEventListener('animationend', onAnim);
+      finish();
+    };
+    modal.addEventListener('animationend', onAnim);
+    modal.classList.add('modal--closing');
+    // Safety net: if reduced-motion suppresses the animation entirely,
+    // animationend never fires. Hide anyway after a short delay.
+    setTimeout(finish, 700);
   }
 
   // -------------------------------------------------------------------------
@@ -338,6 +398,10 @@
     el.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      // Every winctl button gets a UI click. The functions themselves
+      // (close, minimize, fullscreen toggle) handle their own follow-up
+      // animations / IPC.
+      playUiClick();
       fn();
     });
   }
@@ -377,6 +441,9 @@
     root.classList.remove('splash--off');
     root.classList.toggle('splash--boot', splashBootMode);
     root.hidden = false;
+    // Boot-mode plays the startup chime (via renderer.js); in-app reopens
+    // get the menu chime so the user knows the modal opened.
+    if (!splashBootMode) playMenuSound();
 
     // Dismiss on any keystroke or pointer-down anywhere.
     splashKeyHandler = (e) => {
@@ -402,35 +469,35 @@
       splashKeyHandler = null;
     }
 
-    if (splashBootMode) {
-      // Play CRT-off on the splash. When the animation finishes we hide
-      // the splash AND ask the renderer to power-on the terminal.
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        root.hidden = true;
-        root.classList.remove('splash--boot', 'splash--off');
-        if (window.hexTerminal &&
-            typeof window.hexTerminal.revealTerminal === 'function') {
-          window.hexTerminal.revealTerminal();
-        }
-      };
-      const onAnim = (e) => {
-        if (e.animationName !== 'hex-crt-off' &&
-            e.animationName !== 'hex-crt-fade-out') return;
-        root.removeEventListener('animationend', onAnim);
-        finish();
-      };
-      root.addEventListener('animationend', onAnim);
-      // Trigger CRT-off animation.
-      root.classList.add('splash--off');
-      // Safety net.
-      setTimeout(finish, 1200);
-    } else {
+    // Both boot-mode and in-app close play CRT-off on the panel, then
+    // hide the whole splash. Boot-mode additionally calls
+    // revealTerminal() once the animation finishes, so the terminal
+    // CRT-on is what the user sees next.
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
       root.hidden = true;
-    }
-    splashBootMode = false;
+      root.classList.remove('splash--boot', 'splash--off');
+      if (splashBootMode &&
+          window.hexTerminal &&
+          typeof window.hexTerminal.revealTerminal === 'function') {
+        window.hexTerminal.revealTerminal();
+      }
+      splashBootMode = false;
+    };
+    const onAnim = (e) => {
+      // The panel fires hex-crt-off; the backdrop fires hex-splash-out
+      // (in-app) or hex-crt-off (boot). Wait for the panel's so we know
+      // the visual collapse has completed.
+      if (e.animationName !== 'hex-crt-off') return;
+      root.removeEventListener('animationend', onAnim);
+      finish();
+    };
+    root.addEventListener('animationend', onAnim);
+    root.classList.add('splash--off');
+    // Safety net for prefers-reduced-motion or animation suppression.
+    setTimeout(finish, 1200);
   }
 
   function populateSplash(info) {

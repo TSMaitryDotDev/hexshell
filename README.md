@@ -16,7 +16,7 @@ No widgets. No system monitor. No tabs. Just a phosphor-green CRT that runs your
 
 ## Install
 
-All download URLs use `/releases/latest/` so they always pull the newest version. Replace `latest` with a specific tag like `v0.1.3` if you want to pin.
+All download URLs use `/releases/latest/` so they always pull the newest version. Replace `latest` with a specific tag like `v0.1.4` if you want to pin.
 
 ### Arch Linux (recommended)
 
@@ -29,14 +29,14 @@ The AUR `-bin` package wraps the prebuilt AppImage. Auto-updates flow through yo
 If you'd rather drop in a `.pacman` directly:
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.pacman
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x64.pacman
 sudo pacman -U Hexshell-*-x64.pacman
 ```
 
 ### Debian / Ubuntu / Mint / Pop!_OS / Kali
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-amd64.deb
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-amd64.deb
 sudo apt install ./Hexshell-*-amd64.deb
 ```
 
@@ -45,7 +45,7 @@ sudo apt install ./Hexshell-*-amd64.deb
 ### Fedora / RHEL / openSUSE / Rocky / Alma
 
 ```bash
-sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.rpm
+sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x86_64.rpm
 ```
 
 (Substitute `zypper`, `rpm -i`, etc. as appropriate for your distro.)
@@ -53,7 +53,7 @@ sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/latest/down
 ### Any Linux (AppImage)
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.AppImage
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x86_64.AppImage
 chmod +x Hexshell-*.AppImage
 ./Hexshell-*.AppImage
 ```
@@ -63,7 +63,7 @@ The AppImage is self-mounting via FUSE and runs on any Linux with glibc 2.17+ (C
 ### Manual / unsupported distros (tar.xz)
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.tar.xz
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.4-x64.tar.xz
 sudo tar -xJf Hexshell-*-x64.tar.xz -C /opt
 sudo ln -s /opt/Hexshell/hexshell /usr/local/bin/hexshell
 # Optional: setuid the sandbox helper for proper Chromium isolation.

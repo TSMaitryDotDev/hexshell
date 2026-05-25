@@ -113,33 +113,81 @@
   // -------------------------------------------------------------------------
   // Theme
   // -------------------------------------------------------------------------
-  // The phosphor-green palette. Sourced from the same CSS variables we use
-  // in styles/terminal.css so keeping them in sync stays one-line work.
-  const theme = {
-    background: '#000a06',
-    foreground: '#a8ffb0',
-    cursor:     '#7cffb2',
-    cursorAccent: '#001b10',
-    selectionBackground: 'rgba(124, 255, 178, 0.25)',
+  // Theme — derived from CSS variables.
+  //
+  // We read --hex-* values off the document root with getComputedStyle().
+  // That way the JS-side xterm.js theme (which controls background,
+  // foreground, cursor color, selection — these can't be CSS-only because
+  // xterm renders to a canvas/DOM with hard-coded colors) stays in sync
+  // with the CSS chrome variables. When the user switches themes in
+  // Settings, system.js sets `data-theme` on <html>, then calls
+  // window.hexTerminal.setTheme() which re-runs this read and swaps the
+  // xterm theme without re-instantiating the Terminal.
+  //
+  // ANSI colors are theme-agnostic by design: scripts that emit
+  // `\x1b[31m...` expect roughly-red text regardless of the chrome
+  // palette. We do retune them slightly per-theme via deriveAnsi() so
+  // they don't fight the background, but the semantics stay stable.
+  function readVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  function buildTerminalTheme() {
+    const bg     = readVar('--hex-bg',         '#000a06');
+    const fg     = readVar('--hex-fg',         '#a8ffb0');
+    const accent = readVar('--hex-accent2',    '#ff5fbc');
+    const glow   = readVar('--hex-glow',       '#7cffb2');
+    return {
+      background: bg,
+      foreground: fg,
+      cursor:     accent,
+      cursorAccent: bg,
+      // Selection uses the magenta accent at 22% alpha. We can't compute
+      // alpha from a hex string in CSS, so we hard-code rgba() per theme
+      // by reading both the accent and an explicit 'selection' var if the
+      // theme provides one.
+      selectionBackground: readVar('--hex-selection',
+                              hexToRgba(accent, 0.22)),
 
-    // ANSI - tuned to look "right" against the green phosphor BG.
-    black:        '#0a1410',
-    red:          '#ff5577',
-    green:        '#7cffb2',
-    yellow:       '#f2ff7a',
-    blue:         '#7ad7ff',
-    magenta:      '#d59cff',
-    cyan:         '#7afff0',
-    white:        '#dffff0',
-    brightBlack:  '#3a4a44',
-    brightRed:    '#ff8aa1',
-    brightGreen:  '#aaffd0',
-    brightYellow: '#ffffb0',
-    brightBlue:   '#aee2ff',
-    brightMagenta:'#e7c2ff',
-    brightCyan:   '#bdfff8',
-    brightWhite:  '#ffffff'
-  };
+      // ANSI 16. Background-aware: red/yellow/green/etc. shift slightly
+      // so the same `git status` output reads cleanly on every theme.
+      ...deriveAnsi(fg, glow),
+    };
+  }
+  function hexToRgba(hex, alpha) {
+    // `#rrggbb` only — bail if it's already rgba().
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  function deriveAnsi(fg, glow) {
+    // Constants that work across all our themes — red is red, yellow is
+    // yellow, etc. The "green" / "cyan" / "magenta" channels use the
+    // theme's primary phosphor + accent so colorful CLI output (lsd,
+    // git diff) blends with the chrome instead of fighting it.
+    return {
+      black:        '#0a1218',
+      red:          '#ff5577',
+      green:        glow,
+      yellow:       '#f2ff7a',
+      blue:         '#7ad7ff',
+      magenta:      '#ff5fbc',
+      cyan:         '#7afff0',
+      white:        fg,
+      brightBlack:  '#3a4a52',
+      brightRed:    '#ff8aa1',
+      brightGreen:  fg,
+      brightYellow: '#ffffb0',
+      brightBlue:   '#aee2ff',
+      brightMagenta:'#ff9ed4',
+      brightCyan:   '#bdfff8',
+      brightWhite:  '#ffffff'
+    };
+  }
+  const theme = buildTerminalTheme();
 
   // -------------------------------------------------------------------------
   // Terminal init
@@ -304,19 +352,50 @@
   // package commands). Main fires this; we just translate to audio calls.
   // The shell already suppresses the error bell for user-cancelled commands.
   const offBell = api.onBell(({ kind }) => {
-    if (!window.hexAudio) return;
     switch (kind) {
       case 'error':
-        if (typeof window.hexAudio.error === 'function') window.hexAudio.error();
+        if (window.hexAudio && typeof window.hexAudio.error === 'function') {
+          window.hexAudio.error();
+        }
+        // Visual flash — paints a red outline + halo on the terminal
+        // panel for 5 seconds, in addition to the audio chime.
+        flashErrorAlert();
         break;
       case 'process-start':
-        if (typeof window.hexAudio.processStart === 'function') window.hexAudio.processStart();
+        if (window.hexAudio && typeof window.hexAudio.processStart === 'function') {
+          window.hexAudio.processStart();
+        }
         break;
       case 'process-stop':
-        if (typeof window.hexAudio.processStop === 'function') window.hexAudio.processStop();
+        if (window.hexAudio && typeof window.hexAudio.processStop === 'function') {
+          window.hexAudio.processStop();
+        }
         break;
     }
   });
+
+  // 5-second red-pulse overlay on the terminal panel. Fires every time
+  // the shell signals an error. If multiple errors happen in <5s we
+  // restart the animation so the user sees one continuous "alarm" rather
+  // than two overlapping fades.
+  let alertTimer = null;
+  function flashErrorAlert() {
+    const el = document.getElementById('hud-alert');
+    if (!el) return;
+    // Remove + force reflow + re-add to restart the keyframe animation.
+    // Setting the same class twice in a row doesn't re-trigger CSS
+    // animations on its own — the void-element + reflow trick is the
+    // canonical workaround.
+    el.classList.remove('hud-alert--firing');
+    // eslint-disable-next-line no-unused-expressions
+    void el.offsetWidth;
+    el.classList.add('hud-alert--firing');
+    if (alertTimer) clearTimeout(alertTimer);
+    alertTimer = setTimeout(() => {
+      el.classList.remove('hud-alert--firing');
+      alertTimer = null;
+    }, 5000);
+  }
 
   // -------------------------------------------------------------------------
   // Resize handling
@@ -550,24 +629,51 @@
       mount.classList.toggle('hex-cursor-underline', shape === 'underline');
     }
   }
+  /**
+   * Switch the visible theme at runtime. Sets data-theme on <html>
+   * (which CSS variables key off), then re-derives the xterm.js theme
+   * from the new variables. We DON'T re-instantiate Terminal — xterm
+   * supports replacing options.theme on a live instance.
+   *
+   * Allowed values: 'plasma-teal' (default), 'phosphor-green',
+   * 'amber-vintage', 'cyber-magenta', 'ice-blue', 'mono'.
+   * Unknown names fall back to default.
+   */
+  function applyTheme(name) {
+    const ALLOWED = [
+      'plasma-teal', 'phosphor-green', 'amber-vintage',
+      'cyber-magenta', 'ice-blue', 'mono'
+    ];
+    const safe = ALLOWED.includes(name) ? name : 'plasma-teal';
+    document.documentElement.setAttribute('data-theme', safe);
+    if (term) {
+      try { term.options.theme = buildTerminalTheme(); } catch (_) {}
+    }
+  }
+
   window.hexTerminal = Object.freeze({
     setCursorStyle: applyCursorShape,
+    setTheme:       applyTheme,
     shutdownWithCrt,
     revealTerminal
   });
 
-  // Honor a saved cursor preference at boot. system.js owns the prefs file
-  // (`hexshell.prefs` in localStorage); we just read the one key we care
-  // about. If anything goes wrong we fall back to xterm's default block.
+  // Honor saved cursor + theme preferences at boot. system.js owns the
+  // prefs file (`hexshell.prefs` in localStorage); we just read the
+  // keys we care about. If anything goes wrong we fall back to defaults.
   try {
     const raw = localStorage.getItem('hexshell.prefs');
     if (raw) {
       const saved = JSON.parse(raw);
+
       let shape = saved && saved['display.cursor'];
       // Migrate: anyone still on the deprecated 'hyphen' value falls
       // back to underline (closest visual relative).
       if (shape === 'hyphen') shape = 'underline';
       if (typeof shape === 'string') applyCursorShape(shape);
+
+      const themeName = saved && saved['display.theme'];
+      if (typeof themeName === 'string') applyTheme(themeName);
     }
   } catch (_) { /* no localStorage / parse error: keep default */ }
 

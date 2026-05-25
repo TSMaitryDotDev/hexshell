@@ -49,6 +49,26 @@
   color: var(--hex-glow);
   text-shadow: 0 0 6px var(--hex-glow-dim);
   border-bottom: 1px solid var(--hex-line);
+  /* Make the entire titlebar background a window-drag handle. Electron
+     respects -webkit-app-region across all supported platforms (Linux
+     X11/Wayland, macOS, Windows). Children below opt out of drag so
+     clicks still hit them. */
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+}
+
+/* Anything interactive inside the titlebar must opt OUT of drag, or
+ * Chromium ignores the click and moves the window instead. This applies
+ * to the SYSTEM menu button, the window-control trio, and any other
+ * future button/link we add to the bar. */
+.hud-titlebar button,
+.hud-titlebar a,
+.hud-titlebar [role="button"],
+.hud-titlebar input,
+.hud-titlebar select {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .hud-titlebar__brand {
@@ -270,6 +290,28 @@
     inset 0 0 30px rgba(124, 255, 178, 0.05);
   font-family: "MesloLGL", "DejaVu Sans Mono", monospace;
   color: var(--hex-fg);
+  /* CRT power-on / power-off animations.
+   *
+   * Same keyframes the whole window plays on launch/quit (hex-crt-on /
+   * hex-crt-off), scoped to just the panel here so opening Settings feels
+   * like booting a sub-display rather than a generic fade. The backdrop
+   * still does its own fade (`hex-splash-in` we already had), so the
+   * darkening behind the panel is calmer than the panel itself.
+   *
+   * `.modal--closing` is added by system.js before hiding the panel so
+   * the CSS gets a chance to play the off-animation. JS then waits for
+   * `animationend` and flips `hidden` true.
+   */
+  transform-origin: 50% 50%;
+  will-change: transform, filter, opacity;
+  animation: hex-crt-on 520ms cubic-bezier(.25,.65,.20,1) both;
+}
+.modal--closing .modal__panel {
+  animation: hex-crt-off 460ms cubic-bezier(.55,.05,.85,.30) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal__panel,
+  .modal--closing .modal__panel { animation: none; }
 }
 .modal__header {
   display: flex;
@@ -545,9 +587,9 @@
   justify-content: center;
   pointer-events: auto;
   background: rgba(0, 6, 4, 0.7);
-  /* Default fade-in for in-app reopens (SYSTEM menu). Boot-mode opens
-     swap this for `splash--boot` which uses the CRT-on animation against
-     a solid black backdrop instead of the translucent overlay. */
+  /* Soft backdrop fade-in for in-app reopens. Boot-mode swaps the
+     backdrop to solid black via `splash--boot` (terminal isn't visible
+     yet, so we want a hard pure-black behind the CRT effect). */
   animation: hex-splash-in 220ms ease-out;
   transform-origin: 50% 50%;
 }
@@ -556,22 +598,24 @@
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-
-/* Boot-staged splash: solid black backdrop (terminal isn't on yet) and
-   the CRT-on animation playing on the splash itself instead of the
-   regular fade. */
-.splash.splash--boot {
-  background: #000;
-  animation: hex-crt-on 700ms cubic-bezier(.25,.65,.20,1) both;
-  will-change: transform, filter, opacity;
+@keyframes hex-splash-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
-/* When dismissing in boot mode we play the CRT-off, then JS reveals the
-   terminal. The splash element gets `splash--off` for the duration of
-   the off animation. */
+/* Boot-staged backdrop: solid black so the panel's CRT effect plays
+   against pure void, not the translucent overlay we use mid-session. */
+.splash.splash--boot {
+  background: #000;
+}
+
+/* Closing — backdrop fades softly while the inner panel CRT-collapses.
+   We don't apply CRT to the .splash element itself here because that
+   would scale the entire viewport, including any terminal text peeking
+   through during in-app close. */
 .splash.splash--off {
-  animation: hex-crt-off 600ms cubic-bezier(.55,.05,.85,.30) both;
-  will-change: transform, filter, opacity;
+  animation: hex-splash-out 460ms ease-in both;
+  will-change: opacity;
 }
 
 .splash__panel {
@@ -592,6 +636,21 @@
     0 0 0 1px rgba(0, 0, 0, 0.6),
     0 16px 60px rgba(0, 0, 0, 0.7),
     inset 0 0 40px rgba(124, 255, 178, 0.06);
+  /* CRT power-on every time the splash opens (both boot mode and in-app
+     SYSTEM → System info). The keyframes are the same window-level set
+     used for app launch / quit, scoped here to the panel only. */
+  transform-origin: 50% 50%;
+  will-change: transform, filter, opacity;
+  animation: hex-crt-on 600ms cubic-bezier(.25,.65,.20,1) both;
+}
+/* CRT power-off when the splash is dismissed. system.js sets `--off`
+   on the parent .splash element; we cascade that to the panel here. */
+.splash.splash--off .splash__panel {
+  animation: hex-crt-off 520ms cubic-bezier(.55,.05,.85,.30) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash__panel,
+  .splash.splash--off .splash__panel { animation: none; }
 }
 
 .splash__logo {
@@ -881,4 +940,187 @@ body.crt-revealing > *:not(.splash):not(script):not(link) {
   body.crt-boot     { animation: none; opacity: 1; }
   body.crt-shutdown { animation: hex-crt-fade-out 200ms ease-out both; }
   @keyframes hex-crt-fade-out { to { opacity: 0; } }
+}
+
+
+/* Theme picker --------------------------------------------------------------
+ * Each button shows a 3-chip swatch (background / foreground / accent)
+ * matching that theme. The chips are pre-baked colors per data-theme-preview
+ * value — we don't compute them from CSS variables because that would
+ * require duplicating the full theme map in JS just for the picker.
+ *
+ * On the active button the border + label glow phosphor green like the
+ * cursor-shape picker.
+ */
+.modal__choice--themes {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.modal__theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.modal__theme-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: 32px;
+}
+.modal__theme-swatch i {
+  display: block;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Pre-baked swatch palettes. Order: bg, fg, accent. */
+.modal__theme-btn[data-theme-preview="plasma-teal"] .modal__theme-swatch i:nth-child(1) { background: #02060a; }
+.modal__theme-btn[data-theme-preview="plasma-teal"] .modal__theme-swatch i:nth-child(2) { background: #6ef0d8; }
+.modal__theme-btn[data-theme-preview="plasma-teal"] .modal__theme-swatch i:nth-child(3) { background: #ff5fbc; }
+
+.modal__theme-btn[data-theme-preview="phosphor-green"] .modal__theme-swatch i:nth-child(1) { background: #000a06; }
+.modal__theme-btn[data-theme-preview="phosphor-green"] .modal__theme-swatch i:nth-child(2) { background: #7cffb2; }
+.modal__theme-btn[data-theme-preview="phosphor-green"] .modal__theme-swatch i:nth-child(3) { background: #d59cff; }
+
+.modal__theme-btn[data-theme-preview="amber-vintage"] .modal__theme-swatch i:nth-child(1) { background: #0a0700; }
+.modal__theme-btn[data-theme-preview="amber-vintage"] .modal__theme-swatch i:nth-child(2) { background: #ff9933; }
+.modal__theme-btn[data-theme-preview="amber-vintage"] .modal__theme-swatch i:nth-child(3) { background: #ff5a3c; }
+
+.modal__theme-btn[data-theme-preview="cyber-magenta"] .modal__theme-swatch i:nth-child(1) { background: #08020a; }
+.modal__theme-btn[data-theme-preview="cyber-magenta"] .modal__theme-swatch i:nth-child(2) { background: #ff5fbc; }
+.modal__theme-btn[data-theme-preview="cyber-magenta"] .modal__theme-swatch i:nth-child(3) { background: #6ef0d8; }
+
+.modal__theme-btn[data-theme-preview="ice-blue"] .modal__theme-swatch i:nth-child(1) { background: #02080e; }
+.modal__theme-btn[data-theme-preview="ice-blue"] .modal__theme-swatch i:nth-child(2) { background: #66c4ff; }
+.modal__theme-btn[data-theme-preview="ice-blue"] .modal__theme-swatch i:nth-child(3) { background: #c2a3ff; }
+
+.modal__theme-btn[data-theme-preview="mono"] .modal__theme-swatch i:nth-child(1) { background: #050505; }
+.modal__theme-btn[data-theme-preview="mono"] .modal__theme-swatch i:nth-child(2) { background: #ffffff; }
+.modal__theme-btn[data-theme-preview="mono"] .modal__theme-swatch i:nth-child(3) { background: #b8b8b8; }
+
+
+/* Error flash overlay --------------------------------------------------------
+ * Fires for 5s when a command errors. Sits on top of .terminal-shell as
+ * a non-interactive layer; the inset border + box-shadow paint a red
+ * outline that pulses three times then settles, instead of one long
+ * fade (which would feel sluggish). All animation is opacity only — no
+ * filter blurs, no per-frame paint of terminal text.
+ *
+ * Trigger: renderer.js adds `.hud-alert--firing` for 5s on every
+ * `terminal:bell` of kind 'error'. Multiple errors in quick succession
+ * just refresh the timer (we remove + re-add the class), so the user
+ * sees one continuous alert rather than a flicker.
+ */
+.hud-alert {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  /* Inset 2px stroke + soft halo. The halo is what reads as "alarm"
+     against the dark terminal — the 1px border alone is too quiet. */
+  box-shadow:
+    inset 0 0 0 2px var(--hex-error),
+    inset 0 0 24px var(--hex-error-dim, rgba(255, 85, 119, 0.35)),
+    0 0 18px var(--hex-error-dim, rgba(255, 85, 119, 0.35));
+  z-index: 4;
+}
+
+.hud-alert--firing {
+  animation: hex-alert-flash 5000ms cubic-bezier(.25,.65,.20,1) forwards;
+}
+
+@keyframes hex-alert-flash {
+  /* First strong pulse — establishes the alarm. */
+  0%   { opacity: 0; }
+  3%   { opacity: 1; }
+  18%  { opacity: 0.55; }
+
+  /* Second smaller echo. */
+  28%  { opacity: 0.95; }
+  42%  { opacity: 0.4; }
+
+  /* Third gentle echo. */
+  55%  { opacity: 0.75; }
+  70%  { opacity: 0.3; }
+
+  /* Hold + slow fade out. */
+  85%  { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+
+/* Reduced-motion users get one steady glow that fades out, no pulses. */
+@media (prefers-reduced-motion: reduce) {
+  .hud-alert--firing {
+    animation: hex-alert-fade 5000ms ease-out forwards;
+  }
+  @keyframes hex-alert-fade {
+    0%   { opacity: 0; }
+    5%   { opacity: 0.6; }
+    100% { opacity: 0; }
+  }
+}
+
+
+/* Responsive titlebar -----------------------------------------------------
+ *
+ * Priority of items, highest first (always visible) → lowest (first to go):
+ *   1. [ SYSTEM ] menu button       — primary control surface
+ *   2. clock                        — central, identity
+ *   3. window controls (_ ▢ ✕)      — destructive / state, must always work
+ *   4. LINK status                  — useful diagnostic
+ *   5. SHELL: hexsh label           — informational
+ *   6. version chip (v0.1.x)        — nice-to-have
+ *   7. // separators                — pure decoration
+ *
+ * Cuts happen in reverse priority. The window has a hard minWidth floor
+ * of 850px (set in main.js), so the breakpoints below are scoped to the
+ * reachable range — the floor itself is the trigger for the tightest
+ * tier. SYSTEM, the clock, and the window-control trio always survive.
+ */
+
+/* Tier 1 — drop pure-decoration separators + version chip first. */
+@media (max-width: 1024px) {
+  .hud-titlebar__sep,
+  .hud-titlebar__version {
+    display: none;
+  }
+}
+
+/* Tier 2 — drop the SHELL label. */
+@media (max-width: 940px) {
+  #hud-shell {
+    display: none;
+  }
+  /* The brand becomes the only label; tighten so it doesn't dominate. */
+  .hud-titlebar__brand {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+  }
+}
+
+/* Tier 3 — at the floor, drop the LINK status and the brand entirely so
+ * only the essentials (SYSTEM, clock, window controls) survive. */
+@media (max-width: 880px) {
+  #hud-status,
+  .hud-titlebar__brand {
+    display: none;
+  }
+  /* Clock is the focal point now; let it shrink a hair so window
+   * controls don't get pushed off-screen. */
+  .hud-clock {
+    font-size: 14px;
+    letter-spacing: 0.12em;
+  }
+  /* Tighten the SYSTEM button on tiny widths. The label can stay; only
+   * its padding shrinks. */
+  .hud-system {
+    padding: 0 8px;
+    letter-spacing: 0.16em;
+  }
+  /* Window control trio gets a bit tighter too. */
+  .hud-winctl { gap: 4px; }
+  .hud-winctl__btn { width: 22px; }
 }

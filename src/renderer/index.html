@@ -31,6 +31,8 @@
   <link rel="preload" href="../audio/keysound.wav"   as="audio" type="audio/wav" />
   <link rel="preload" href="../audio/cmd-error.wav"  as="audio" type="audio/wav" />
   <link rel="preload" href="../audio/process.wav"    as="audio" type="audio/wav" />
+  <link rel="preload" href="../audio/menuOpen.wav"   as="audio" type="audio/wav" />
+  <link rel="preload" href="../audio/click.wav"      as="audio" type="audio/wav" />
   <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
   <link rel="stylesheet" href="../styles/reset.css" />
   <link rel="stylesheet" href="../styles/terminal.css" />
@@ -157,6 +159,36 @@
       <section class="modal__body">
         <h3 class="modal__section-title">DISPLAY</h3>
         <div class="modal__row modal__row--choice">
+          <span class="modal__row-label">Theme</span>
+          <div class="modal__choice modal__choice--themes" role="radiogroup" aria-label="Theme" data-pref-group="display.theme">
+            <button type="button" role="radio" data-value="plasma-teal"    aria-checked="false" class="modal__choice-btn modal__theme-btn" data-theme-preview="plasma-teal">
+              <span class="modal__theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="modal__choice-text">Plasma Teal</span>
+            </button>
+            <button type="button" role="radio" data-value="phosphor-green" aria-checked="false" class="modal__choice-btn modal__theme-btn" data-theme-preview="phosphor-green">
+              <span class="modal__theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="modal__choice-text">Phosphor Green</span>
+            </button>
+            <button type="button" role="radio" data-value="amber-vintage"  aria-checked="false" class="modal__choice-btn modal__theme-btn" data-theme-preview="amber-vintage">
+              <span class="modal__theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="modal__choice-text">Amber Vintage</span>
+            </button>
+            <button type="button" role="radio" data-value="cyber-magenta"  aria-checked="false" class="modal__choice-btn modal__theme-btn" data-theme-preview="cyber-magenta">
+              <span class="modal__theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="modal__choice-text">Cyber Magenta</span>
+            </button>
+            <button type="button" role="radio" data-value="ice-blue"       aria-checked="false" class="modal__choice-btn modal__theme-btn" data-theme-preview="ice-blue">
+              <span class="modal__theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="modal__choice-text">Ice Blue</span>
+            </button>
+            <button type="button" role="radio" data-value="mono"           aria-checked="false" class="modal__choice-btn modal__theme-btn" data-theme-preview="mono">
+              <span class="modal__theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="modal__choice-text">Mono</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal__row modal__row--choice">
           <span class="modal__row-label">Cursor shape</span>
           <div class="modal__choice" role="radiogroup" aria-label="Cursor shape" data-pref-group="display.cursor">
             <button type="button" role="radio" data-value="block"     aria-checked="false" class="modal__choice-btn">
@@ -207,6 +239,10 @@
 
   <main class="terminal-shell">
     <div id="terminal" class="terminal" role="application" aria-label="Terminal"></div>
+    <!-- Error flash overlay. Sits inside .terminal-shell so it inherits
+         the same rounded corners and bounds. pointer-events: none so it
+         never steals input. JS toggles `.hud-alert--firing` for 5s. -->
+    <div id="hud-alert" class="hud-alert" aria-hidden="true"></div>
   </main>
 
   <div class="hud-scan" aria-hidden="true"></div>

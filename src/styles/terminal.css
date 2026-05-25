@@ -5,24 +5,144 @@
    sci-fi effects live in hud.css and sit ABOVE the terminal as overlays.
    ------------------------------------------------------------------------- */
 
-:root {
-  /* Phosphor palette */
-  --hex-bg:        #000a06;
-  --hex-bg-deep:   #00060a;
-  --hex-fg:        #a8ffb0;
-  --hex-glow:      #7cffb2;
-  --hex-glow-dim:  rgba(124, 255, 178, 0.35);
-  --hex-line:      rgba(124, 255, 178, 0.18);
-  --hex-line-soft: rgba(124, 255, 178, 0.08);
-  --hex-accent:    #7afff0;
-  --hex-warn:      #f2ff7a;
-  --hex-error:     #ff5577;
+/* ──────────────────────────────────────────────────────────────────────
+ * Hexshell themes.
+ *
+ * Each theme is a CSS-variable bundle. Switching is done by setting
+ * `data-theme="<name>"` on the <html> element from system.js. xterm.js
+ * has its own JS-side theme (background / foreground / cursor / selection
+ * live on the Terminal options, not in CSS), so renderer.js re-derives
+ * those from these variables when a theme changes.
+ *
+ * The :root block below is the **default** ("Plasma Teal"). Specific
+ * themes override only what's different — keeps each theme block tight.
+ *
+ * Adding a theme:
+ *   1. Add an [data-theme="name"] block below mirroring the same vars.
+ *   2. Add a label in src/renderer/system.js's choice-button list.
+ *   3. Done. xterm + chrome both re-derive from these vars automatically.
+ * ────────────────────────────────────────────────────────────────────── */
+
+:root,
+:root[data-theme="plasma-teal"] {
+  /* Backgrounds */
+  --hex-bg:         #02060a;
+  --hex-bg-deep:    #000308;
+  --hex-bg-panel:   rgba(2, 8, 14, 0.92);
+
+  /* Primary phosphor (terminal text + most chrome) */
+  --hex-fg:         #a0fff0;
+  --hex-glow:       #6ef0d8;
+  --hex-glow-dim:   rgba(110, 240, 216, 0.35);
+  --hex-line:       rgba(110, 240, 216, 0.18);
+  --hex-line-soft:  rgba(110, 240, 216, 0.08);
+  --hex-accent:     #7afff0;
+
+  /* Cyberpunk accent (cursor / selection / hud edges) */
+  --hex-accent2:        #ff5fbc;
+  --hex-accent2-dim:    rgba(255, 95, 188, 0.28);
+  --hex-accent2-line:   rgba(255, 95, 188, 0.18);
+
+  /* Severity */
+  --hex-warn:       #f2ff7a;
+  --hex-error:      #ff5577;
+  --hex-error-dim:  rgba(255, 85, 119, 0.35);
 
   /* Layout knobs */
   --hud-pad:        28px;
   --hud-radius:    14px;
-  --hud-titlebar:  56px;       /* taller so the SYSTEM button has breathing room */
-  --hud-gap:        10px;      /* gap between titlebar bottom and terminal panel */
+  --hud-titlebar:  56px;
+  --hud-gap:        10px;
+}
+
+/* ─── Phosphor Green (the classic CRT look from earlier releases) ────── */
+:root[data-theme="phosphor-green"] {
+  --hex-bg:         #000a06;
+  --hex-bg-deep:    #00060a;
+  --hex-bg-panel:   rgba(0, 10, 6, 0.92);
+
+  --hex-fg:         #a8ffb0;
+  --hex-glow:       #7cffb2;
+  --hex-glow-dim:   rgba(124, 255, 178, 0.35);
+  --hex-line:       rgba(124, 255, 178, 0.18);
+  --hex-line-soft:  rgba(124, 255, 178, 0.08);
+  --hex-accent:     #7afff0;
+
+  --hex-accent2:        #d59cff;
+  --hex-accent2-dim:    rgba(213, 156, 255, 0.28);
+  --hex-accent2-line:   rgba(213, 156, 255, 0.16);
+}
+
+/* ─── Amber Vintage (yellow-orange CRT, 70s mainframe) ───────────────── */
+:root[data-theme="amber-vintage"] {
+  --hex-bg:         #0a0700;
+  --hex-bg-deep:    #050300;
+  --hex-bg-panel:   rgba(10, 7, 0, 0.92);
+
+  --hex-fg:         #ffc46e;
+  --hex-glow:       #ff9933;
+  --hex-glow-dim:   rgba(255, 153, 51, 0.35);
+  --hex-line:       rgba(255, 153, 51, 0.20);
+  --hex-line-soft:  rgba(255, 153, 51, 0.08);
+  --hex-accent:     #ffd97a;
+
+  --hex-accent2:        #ff5a3c;
+  --hex-accent2-dim:    rgba(255, 90, 60, 0.28);
+  --hex-accent2-line:   rgba(255, 90, 60, 0.18);
+}
+
+/* ─── Cyber Magenta (Akira / Blade Runner pink-purple) ─────────────────── */
+:root[data-theme="cyber-magenta"] {
+  --hex-bg:         #08020a;
+  --hex-bg-deep:    #03000a;
+  --hex-bg-panel:   rgba(8, 2, 10, 0.92);
+
+  --hex-fg:         #ffaee0;
+  --hex-glow:       #ff5fbc;
+  --hex-glow-dim:   rgba(255, 95, 188, 0.35);
+  --hex-line:       rgba(255, 95, 188, 0.20);
+  --hex-line-soft:  rgba(255, 95, 188, 0.08);
+  --hex-accent:     #ff8dd2;
+
+  --hex-accent2:        #6ef0d8;
+  --hex-accent2-dim:    rgba(110, 240, 216, 0.28);
+  --hex-accent2-line:   rgba(110, 240, 216, 0.16);
+}
+
+/* ─── Ice Blue (cold electric, glacier hologram) ─────────────────────── */
+:root[data-theme="ice-blue"] {
+  --hex-bg:         #02080e;
+  --hex-bg-deep:    #00040a;
+  --hex-bg-panel:   rgba(2, 8, 14, 0.92);
+
+  --hex-fg:         #c0e6ff;
+  --hex-glow:       #66c4ff;
+  --hex-glow-dim:   rgba(102, 196, 255, 0.35);
+  --hex-line:       rgba(102, 196, 255, 0.20);
+  --hex-line-soft:  rgba(102, 196, 255, 0.08);
+  --hex-accent:     #99d4ff;
+
+  --hex-accent2:        #c2a3ff;
+  --hex-accent2-dim:    rgba(194, 163, 255, 0.28);
+  --hex-accent2-line:   rgba(194, 163, 255, 0.18);
+}
+
+/* ─── Mono Terminal (no color, paper-white on black, accessibility) ──── */
+:root[data-theme="mono"] {
+  --hex-bg:         #050505;
+  --hex-bg-deep:    #000000;
+  --hex-bg-panel:   rgba(5, 5, 5, 0.92);
+
+  --hex-fg:         #e8e8e8;
+  --hex-glow:       #ffffff;
+  --hex-glow-dim:   rgba(255, 255, 255, 0.30);
+  --hex-line:       rgba(255, 255, 255, 0.18);
+  --hex-line-soft:  rgba(255, 255, 255, 0.06);
+  --hex-accent:     #f0f0f0;
+
+  --hex-accent2:        #b8b8b8;
+  --hex-accent2-dim:    rgba(184, 184, 184, 0.25);
+  --hex-accent2-line:   rgba(184, 184, 184, 0.18);
 }
 
 .terminal-shell {
@@ -36,7 +156,7 @@
   /* A single, cheap inset glow — no box-shadow blur on every frame. */
   box-shadow:
     inset 0 0 0 1px var(--hex-line),
-    inset 0 0 60px rgba(124, 255, 178, 0.06);
+    inset 0 0 60px var(--hex-line-soft);
   /* Promote to its own compositor layer so scanline overlays don't repaint
      terminal text. */
   isolation: isolate;

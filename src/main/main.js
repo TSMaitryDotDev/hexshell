@@ -46,6 +46,12 @@ function createWindow() {
     autoHideMenuBar: true,
     backgroundColor: '#000000',
     title: 'Hexshell',
+    // Floor on the restored / resized window. Below ~850px the titlebar
+    // starts crowding the SYSTEM button against the window controls and
+    // the terminal grid loses readability. minHeight matches the smallest
+    // viewport where the prompt + a few rows of output stay legible.
+    minWidth: 850,
+    minHeight: 500,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,

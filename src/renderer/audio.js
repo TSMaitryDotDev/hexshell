@@ -36,6 +36,8 @@
   const KEY_SRC     = '../audio/keysound.wav';
   const ERR_SRC     = '../audio/cmd-error.wav';
   const PROC_SRC    = '../audio/process.wav';
+  const MENU_SRC    = '../audio/menuOpen.wav';
+  const UICLICK_SRC = '../audio/click.wav';
 
   // -------------------------------------------------------------------------
   // Startup chime
@@ -134,7 +136,10 @@
 
   // Per-kind enable flags. Settings flips these at runtime; defaults are
   // "everything on" because audio is the whole vibe of the app.
-  const enabled = { click: true, error: true, process: true };
+  const enabled = {
+    click: true, error: true, process: true,
+    menu: true, ui: true,
+  };
   // Master multiplier in [0..1]; multiplied into each kind's gain so the
   // single slider in Settings can attenuate everything together.
   let masterScale = 1.0;
@@ -149,6 +154,10 @@
   let procBuffer = null;   // process loop
   /** @type {AudioBuffer | null} */
   let startupBuffer = null; // startup chime (low-latency WebAudio path)
+  /** @type {AudioBuffer | null} */
+  let menuBuffer = null;    // menu/modal/splash open chime
+  /** @type {AudioBuffer | null} */
+  let uiClickBuffer = null; // generic UI click (menu items, settings buttons)
   /** @type {GainNode | null} */
   let masterGain = null;   // for keysound
   /** @type {GainNode | null} */
@@ -157,10 +166,16 @@
   let procGain = null;     // for process loop
   /** @type {GainNode | null} */
   let startupGain = null;  // for startup chime
+  /** @type {GainNode | null} */
+  let menuGain = null;     // for menu open chime
+  /** @type {GainNode | null} */
+  let uiClickGain = null;  // for UI click
   /** @type {AudioBufferSourceNode | null} */
   let procSource = null;   // currently looping source, if any
   let lastClickAt = 0;
   let lastErrorAt = 0;
+  let lastMenuAt = 0;
+  let lastUiClickAt = 0;
   let liveVoices = 0;
   let initPromise = null;
   let warnedNotReady = false;
@@ -204,14 +219,30 @@
         startupGain.gain.value = 0.6 * masterScale;
         startupGain.connect(ctx.destination);
 
-        // Decode all four in parallel. If any fails individually, the
-        // others still work — we don't want a missing sample to silence
-        // the entire audio module.
-        const [keyBuf, errBuf, procBuf, startBuf] = await Promise.allSettled([
+        // Menu/modal open chime. Slightly quieter than the startup chime
+        // because it fires every time a menu opens — we want it noticeable
+        // without being aggressive.
+        menuGain = ctx.createGain();
+        menuGain.gain.value = 0.45 * masterScale;
+        menuGain.connect(ctx.destination);
+
+        // UI click. Quieter still — fires on every menu item / settings
+        // button. Same intent as the keysound but for cursor-driven UI.
+        uiClickGain = ctx.createGain();
+        uiClickGain.gain.value = 0.40 * masterScale;
+        uiClickGain.connect(ctx.destination);
+
+        // Decode all six in parallel. Promise.allSettled so a missing
+        // sample never silences the rest of the mixer.
+        const [
+          keyBuf, errBuf, procBuf, startBuf, menuBuf, uiBuf
+        ] = await Promise.allSettled([
           decode(KEY_SRC),
           decode(ERR_SRC),
           decode(PROC_SRC),
-          decode(STARTUP_SRC)
+          decode(STARTUP_SRC),
+          decode(MENU_SRC),
+          decode(UICLICK_SRC)
         ]);
         if (keyBuf.status === 'fulfilled')  buffer     = keyBuf.value;
         else if (typeof console !== 'undefined') {
@@ -228,6 +259,14 @@
         if (startBuf.status === 'fulfilled') startupBuffer = startBuf.value;
         else if (typeof console !== 'undefined') {
           console.warn('[hexshell] startup chime decode failed:', startBuf.reason && startBuf.reason.message);
+        }
+        if (menuBuf.status === 'fulfilled') menuBuffer = menuBuf.value;
+        else if (typeof console !== 'undefined') {
+          console.warn('[hexshell] menu chime decode failed:', menuBuf.reason && menuBuf.reason.message);
+        }
+        if (uiBuf.status === 'fulfilled') uiClickBuffer = uiBuf.value;
+        else if (typeof console !== 'undefined') {
+          console.warn('[hexshell] ui click decode failed:', uiBuf.reason && uiBuf.reason.message);
         }
         return true;
       } catch (err) {
@@ -305,9 +344,11 @@
     masterScale = clamped;
     if (!ctx) return;
     const t = ctx.currentTime;
-    if (masterGain) masterGain.gain.setTargetAtTime(KEY.VOLUME * masterScale, t, 0.01);
-    if (errGain)    errGain.gain.setTargetAtTime(ERR.VOLUME * masterScale, t, 0.01);
+    if (masterGain)  masterGain.gain.setTargetAtTime(KEY.VOLUME * masterScale, t, 0.01);
+    if (errGain)     errGain.gain.setTargetAtTime(ERR.VOLUME * masterScale, t, 0.01);
     if (startupGain) startupGain.gain.setTargetAtTime(0.6 * masterScale, t, 0.01);
+    if (menuGain)    menuGain.gain.setTargetAtTime(0.45 * masterScale, t, 0.01);
+    if (uiClickGain) uiClickGain.gain.setTargetAtTime(0.40 * masterScale, t, 0.01);
     // procGain is dynamic; we let processStart/Stop handle ramps and pick
     // the new ceiling on the next start. If the loop is currently active
     // we DO update its target so the slider feels responsive.
@@ -316,7 +357,14 @@
     }
   }
 
-  /** Toggle a sound kind. `kind` is one of: 'click' | 'error' | 'process'. */
+  /**
+   * Toggle a sound kind. `kind` is one of:
+   *   'click'   — keysound on every keystroke
+   *   'error'   — chime when a command exits non-zero
+   *   'process' — ambient loop during install/download
+   *   'menu'    — chime when SYSTEM menu / Settings / Splash open
+   *   'ui'      — generic click on menu items / settings buttons
+   */
   function setEnabled(kind, on) {
     if (!(kind in enabled)) return;
     const wasOn = enabled[kind];
@@ -362,6 +410,57 @@
     } catch (_) {
       // AudioContext torn down; nothing to do.
     }
+  }
+
+  /**
+   * Menu/modal/splash open chime. Throttled at 200 ms because two menus
+   * sometimes open in close succession (e.g. SYSTEM → Settings) and we
+   * don't want the audio to overlap into a smear.
+   */
+  function menu() {
+    if (!enabled.menu) return;
+    const now = performance.now();
+    if (now - lastMenuAt < 200) return;
+    lastMenuAt = now;
+
+    if (ctx && ctx.state === 'suspended') {
+      try { ctx.resume(); } catch (_) {}
+    }
+    if (!ctx || !menuBuffer || !menuGain) return;
+
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = menuBuffer;
+      src.connect(menuGain);
+      src.start(0);
+      src.onended = () => { try { src.disconnect(); } catch (_) {} };
+    } catch (_) {}
+  }
+
+  /**
+   * Generic UI click — fired when the user activates a menu item, a
+   * settings choice button, the close button, etc. Distinct from the
+   * keysound (which is per-keystroke). Throttled at 60 ms so a fast
+   * double-click doesn't double-trigger.
+   */
+  function uiClick() {
+    if (!enabled.ui) return;
+    const now = performance.now();
+    if (now - lastUiClickAt < 60) return;
+    lastUiClickAt = now;
+
+    if (ctx && ctx.state === 'suspended') {
+      try { ctx.resume(); } catch (_) {}
+    }
+    if (!ctx || !uiClickBuffer || !uiClickGain) return;
+
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = uiClickBuffer;
+      src.connect(uiClickGain);
+      src.start(0);
+      src.onended = () => { try { src.disconnect(); } catch (_) {} };
+    } catch (_) {}
   }
 
   /**
@@ -455,13 +554,14 @@
 
   // Expose the API. Frozen so renderer.js can't accidentally clobber it.
   window.hexAudio = Object.freeze({
-    click,
-    error,
-    processStart,
-    processStop,
-    playStartup,         // explicit trigger, called from renderer.js so
-                         // the chime aligns with the CRT power-on visual
-    setVolume,           // alias for setMasterVolume; kept for back-compat
+    click,                // keysound — per-keystroke
+    error,                // command-error chime
+    processStart,         // ambient install/download loop start
+    processStop,          // ambient install/download loop stop
+    playStartup,          // boot chime, synced with CRT power-on
+    menu,                 // chime when SYSTEM menu / Settings / Splash open
+    uiClick,              // generic click on menu items / settings buttons
+    setVolume,            // alias for setMasterVolume; kept for back-compat
     setMasterVolume,
     setEnabled
   });

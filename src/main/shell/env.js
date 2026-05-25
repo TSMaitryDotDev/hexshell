@@ -182,17 +182,19 @@ class Env {
 }
 
 const ANSI = Object.freeze({
-  reset:  '\x1b[0m',
-  dim:    '\x1b[2m',
-  bold:   '\x1b[1m',
-  red:    '\x1b[38;5;203m',
-  green:  '\x1b[38;5;120m',
-  yellow: '\x1b[38;5;228m',
-  blue:   '\x1b[38;5;75m',
-  magenta:'\x1b[38;5;177m',
-  cyan:   '\x1b[38;5;87m',
-  gray:   '\x1b[38;5;240m',
-  fg:     '\x1b[38;5;156m'
+  reset:    '\x1b[0m',
+  dim:      '\x1b[2m',
+  bold:     '\x1b[1m',
+  blink:    '\x1b[5m',     // SGR 5 — slow blink. Used on error lines.
+  noBlink:  '\x1b[25m',    // SGR 25 — turn blink off without resetting fg.
+  red:      '\x1b[38;5;203m',
+  green:    '\x1b[38;5;120m',
+  yellow:   '\x1b[38;5;228m',
+  blue:     '\x1b[38;5;75m',
+  magenta:  '\x1b[38;5;177m',
+  cyan:     '\x1b[38;5;87m',
+  gray:     '\x1b[38;5;240m',
+  fg:       '\x1b[38;5;156m'
 });
 
 module.exports = { Env, ANSI };
