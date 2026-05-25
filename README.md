@@ -4,6 +4,12 @@ A fullscreen sci-fi terminal built on **Electron**, **xterm.js** and **node-pty*
 
 No widgets. No system monitor. No tabs. Just a phosphor-green CRT that runs your shell.
 
+<p align="center">
+  <a href="./images/preview.png">
+    <img src="./images/preview.png" alt="Hexshell preview — phosphor-green HUD with system info splash, animated frame, and the hexsh prompt" width="900">
+  </a>
+</p>
+
 ![status](https://img.shields.io/github/v/release/TSMaitryDotDev/hexshell?label=release)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![platform](https://img.shields.io/badge/platform-Linux-blue)
