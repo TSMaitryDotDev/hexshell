@@ -5,6 +5,20 @@ All notable changes to Hexshell are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.3] — 2026-05-25
+
+Hotfix on top of 0.1.2.
+
+### Fixed
+
+- **Renderer no longer dies silently before xterm boots.** A `let
+  chimeFired` declaration was placed below the function that read it,
+  putting `playStartupChime()` in temporal-dead-zone territory on the
+  first call. The thrown `ReferenceError` killed the whole renderer
+  IIFE — symptoms were `LINK: ESTABLISHING` stuck, `SHELL: detecting…`
+  never resolving, no cursor, no clock ticking. Moved the declaration
+  above its consumer.
+
 ## [0.1.2] — 2026-05-24
 
 Hotfix on top of 0.1.1.

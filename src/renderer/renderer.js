@@ -43,6 +43,24 @@
   }
 
   const staged = shouldStageBoot();
+
+  /**
+   * Trigger the startup chime, once. Audio dispatch can run a few ms
+   * before the renderer paints, but xterm.js compositor scheduling means
+   * the user actually perceives them as simultaneous — exactly what we
+   * want. Declared BEFORE the boot branch below because both arms call
+   * it; `let` bindings respect their declaration order (TDZ), so a
+   * `playStartupChime()` higher up would crash the whole IIFE.
+   */
+  let chimeFired = false;
+  function playStartupChime() {
+    if (chimeFired) return;
+    chimeFired = true;
+    if (window.hexAudio && typeof window.hexAudio.playStartup === 'function') {
+      window.hexAudio.playStartup();
+    }
+  }
+
   if (staged) {
     document.body.classList.add('crt-staged');
     // Chime fires when the splash opens (it owns the first visual). See
@@ -59,21 +77,6 @@
       document.body.classList.remove('crt-boot');
       document.body.removeEventListener('animationend', onBoot);
     });
-  }
-
-  /**
-   * Trigger the startup chime, once. Audio dispatch can run a few ms
-   * before the renderer paints, but xterm.js compositor scheduling means
-   * the user actually perceives them as simultaneous — exactly what we
-   * want.
-   */
-  let chimeFired = false;
-  function playStartupChime() {
-    if (chimeFired) return;
-    chimeFired = true;
-    if (window.hexAudio && typeof window.hexAudio.playStartup === 'function') {
-      window.hexAudio.playStartup();
-    }
   }
 
   /**
