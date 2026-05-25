@@ -30,11 +30,14 @@ work around it.
 src/                        Application source (Electron main, preload, renderer)
 scripts/                    Build-time helpers (font fetch, glyph fetch, release driver)
 build/                      Icon assets for electron-builder (icon.svg + icon.png)
+images/                     User-facing screenshots (README preview, social card)
 packaging/aur/hexshell-bin/ AUR PKGBUILD + .SRCINFO mirror (source of truth lives on AUR git)
 .github/workflows/          GitHub Actions: release.yml builds + publishes on tag push
 electron-builder.yml        Per-target build config (deb / rpm / pacman / AppImage / tar.xz)
 package.json                Version + npm scripts; "version" is the release version
 CHANGELOG.md                User-facing release notes; follows Keep a Changelog
+README.md                   User-facing landing page (install, features, shortcuts)
+hexsh.md                    THIS FILE — maintainer handbook
 ```
 
 Things that **never** belong in git:
@@ -44,6 +47,8 @@ Things that **never** belong in git:
 - `src/renderer/fonts/*.ttf`             (downloaded by `bun run fonts`)
 - `src/main/shell/glyphnames.generated.json`  (downloaded by `bun run glyphs`)
 - `src/renderer/os-logos.generated.json`      (downloaded by `bun run logos`)
+- AppImages, `.deb`, `.rpm`, `.pacman`, `.tar.xz` (build outputs;
+  the AUR clone has its own `.gitignore` for makepkg artifacts)
 
 `.gitignore` already covers these. The fetchers are idempotent — `bun install`
 runs them via `postinstall`.
@@ -107,7 +112,8 @@ git push origin v0.1.1
 # 4. Wait for CI to go green (~6–10 min)
 gh run watch $(gh run list --limit 1 --json databaseId -q '.[0].databaseId') --exit-status
 
-# 5. Publish the draft GitHub release
+# 5. Publish the draft GitHub release (CI creates it as draft on purpose
+#    so you can eyeball assets before users see them)
 gh release edit v0.1.1 --draft=false
 
 # 6. Push the AUR update (regenerate .SRCINFO first)
@@ -116,6 +122,16 @@ bash -c "cd /tmp/hexshell-bin && git pull && cp ~/Projects/Hexshell/packaging/au
   git add PKGBUILD .SRCINFO && \
   git commit -m 'hexshell-bin 0.1.1-1: bump to upstream v0.1.1' && \
   git push"
+
+# 7. Smoke-test from a clean machine (or wipe ~/.cache/yay/hexshell-bin
+#    locally and re-install). Walk through:
+#      - yay -Syu hexshell-bin              picks up the new version
+#      - hexshell                            launches without --no-sandbox
+#      - LINK status flips ESTABLISHING -> ACTIVE
+#      - SHELL label resolves to 'hexsh'
+#      - cursor blinks, clock ticks
+#    If any of those fail, the failure goes in §9 and the fix in this
+#    page in the SAME commit as the code fix.
 ```
 
 Everything below is the long version.
@@ -344,6 +360,12 @@ In `package()`:
 
 ## 8. Notes per distro family
 
+> URLs in this section use `/releases/latest/download/` so they never
+> need bumping per release. GitHub redirects to the newest published
+> tag automatically. Replace `latest` with a tag name (e.g. `v0.1.3`)
+> when you need to pin a specific release for a bug report or
+> reproducibility check.
+
 ### 8.1. Arch / Manjaro / EndeavourOS / Garuda / Artix
 
 Two install paths:
@@ -354,15 +376,15 @@ paru -S hexshell-bin
 yay -S hexshell-bin
 
 # Direct .pacman (no auto-updates; one-shot install)
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/download/v0.1.1/Hexshell-0.1.1-x64.pacman
-sudo pacman -U Hexshell-0.1.1-x64.pacman
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.pacman
+sudo pacman -U Hexshell-*-x64.pacman
 ```
 
 ### 8.2. Debian / Ubuntu / Mint / Pop!_OS / Kali
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/download/v0.1.1/Hexshell-0.1.1-amd64.deb
-sudo apt install ./Hexshell-0.1.1-amd64.deb
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-amd64.deb
+sudo apt install ./Hexshell-*-amd64.deb
 ```
 
 `apt install ./<file>.deb` (with the `./`) is preferred over `dpkg -i`
@@ -371,7 +393,7 @@ because it pulls runtime dependencies for you.
 ### 8.3. Fedora / RHEL / openSUSE / Rocky / Alma
 
 ```bash
-sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/download/v0.1.1/Hexshell-0.1.1-x86_64.rpm
+sudo dnf install https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.rpm
 # or zypper, or rpm -i
 ```
 
@@ -381,7 +403,7 @@ fpm; Arch's strict rpmbuild does not — see §9.1).
 ### 8.4. Any Linux (AppImage)
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/download/v0.1.1/Hexshell-0.1.1-x86_64.AppImage
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x86_64.AppImage
 chmod +x Hexshell-*.AppImage
 ./Hexshell-*.AppImage
 ```
@@ -393,8 +415,8 @@ clicking the file integrates it into your app menu.
 ### 8.5. Slackware / Void / Gentoo / NixOS / manual
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/download/v0.1.1/Hexshell-0.1.1-x64.tar.xz
-sudo tar -xJf Hexshell-0.1.1-x64.tar.xz -C /opt
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/Hexshell-0.1.3-x64.tar.xz
+sudo tar -xJf Hexshell-*-x64.tar.xz -C /opt
 sudo ln -s /opt/Hexshell/hexshell /usr/local/bin/hexshell
 ```
 
@@ -412,7 +434,7 @@ sudo chmod 4755 /opt/Hexshell/chrome-sandbox
 Every release includes `SHA256SUMS`:
 
 ```bash
-curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/download/v0.1.1/SHA256SUMS
+curl -LO https://github.com/TSMaitryDotDev/hexshell/releases/latest/download/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
@@ -485,6 +507,34 @@ section is the why so you don't undo it.
   scripts, patches). The AUR clone has a `.gitignore` that prevents
   `makepkg`'s output from being staged. If you ever delete the
   `.gitignore`, recreate it from `packaging/aur/hexshell-bin/.gitignore`.
+
+### 9.7. Renderer hang on boot — `LINK: ESTABLISHING` stuck forever
+
+- **Symptom**: app launches, titlebar paints, but `SHELL: detecting…`
+  never resolves, no cursor, no clock ticking, prompt never appears.
+- **Root cause #1** (0.1.1): Orbitron `@font-face` used
+  `format("truetype-variations")`, a CSS Fonts Module Level 4 string
+  some Chromium builds reject. `document.fonts.ready` then never
+  resolves and `await` in `bootTerminal()` blocks forever.
+- **Fix**: use plain `format("truetype")` for variable TTFs (axes still
+  work). Rename file to drop `[wght]` brackets that some font loaders
+  trip over. Wrap `document.fonts.ready` in a `Promise.race` with a
+  500 ms timeout so a future broken `@font-face` can never hang us
+  again.
+- **Root cause #2** (0.1.2): a `let chimeFired = false; function
+  playStartupChime() { ... chimeFired ... }` block was placed below
+  the call site that invoked `playStartupChime()`. `let` bindings
+  live in the temporal dead zone before their declaration line, so
+  the very first call threw `ReferenceError`, killing the entire
+  renderer IIFE silently.
+- **Fix**: declare `let` bindings ABOVE consumers — function
+  declarations hoist but `let`/`const` they read do not. Two-line
+  reorder.
+
+If you ever see `LINK: ESTABLISHING` stuck again, open DevTools first
+thing — the first red Console error tells you the line that threw.
+Don't try to debug from screenshots; the stack trace is the source of
+truth.
 
 ---
 
@@ -598,6 +648,55 @@ bun run logos --force      # re-bundle Simple Icons
 
 These run automatically on `bun install`, so most of the time you don't
 need to touch them.
+
+### 10.8. Smoke-test an AUR release before users hit it
+
+After CI publishes a draft and BEFORE you push the AUR PKGBUILD bump,
+verify the actual download path one more time:
+
+```bash
+# 1. Publish the GitHub draft so URLs become anonymous-readable.
+gh release edit v0.1.3 --draft=false
+
+# 2. Build the AUR package against the live release URL.
+bash -c "cd /tmp/hexshell-bin && cp ~/Projects/Hexshell/packaging/aur/hexshell-bin/PKGBUILD . && \
+  makepkg --printsrcinfo > .SRCINFO && \
+  rm -f *.pkg.tar.zst && makepkg -f --noconfirm"
+
+# 3. Install + launch.
+sudo pacman -U /tmp/hexshell-bin/hexshell-bin-*-x86_64.pkg.tar.zst
+hexshell &
+sleep 4
+pgrep -a hexshell             # confirm process alive
+sudo pacman -Rns --noconfirm hexshell-bin
+
+# 4. Only now push to AUR.
+bash -c "cd /tmp/hexshell-bin && git add PKGBUILD .SRCINFO && \
+  git commit -m 'hexshell-bin <ver>-1: bump' && git push"
+```
+
+This catches: 404 on AppImage URL, broken PKGBUILD package() steps,
+runtime crashes that don't show in `bun run start`, missing setuid on
+chrome-sandbox, icon directory typos. All of those have happened to us
+in the 0.1.x cycle.
+
+### 10.9. Update the README preview screenshot
+
+After a UI change that's worth showing off:
+
+```bash
+# 1. Take the screenshot at 1920x1080 (matches images/preview.png aspect).
+#    KDE: spectacle --rectangle, drag the Hexshell window region.
+#    Save as PNG, drop it at images/preview.png (overwrite).
+# 2. Commit just that file.
+git add images/preview.png
+git commit -m "docs: refresh README preview"
+git push
+```
+
+Don't link external image hosts — the README's <img src="./images/...">
+relative path means GitHub serves it from the same domain (no third-
+party trackers, works in offline mirrors).
 
 ---
 
